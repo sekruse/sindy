@@ -5,8 +5,6 @@ import de.hpi.isg.mdms.util.CollectionUtils;
 import de.hpi.isg.sindy.util.InclusionDependencies;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
@@ -15,26 +13,19 @@ import java.util.*;
  */
 public class AprioriCandidateGenerator implements CandidateGenerator {
 
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
-
-    private final NaryIndRestrictions naryIndRestrictions;
-
-    public AprioriCandidateGenerator(NaryIndRestrictions naryIndRestrictions) {
-        this.naryIndRestrictions = naryIndRestrictions;
-    }
-
-
     @Override
-    public Collection<InclusionDependency> generate(Collection<InclusionDependency> inds,
-                                                                 IndSubspaceKey indSubspaceKey,
-                                                                 NaryIndRestrictions naryIndRestrictions) {
-
-        Collection<InclusionDependency> candidates = new LinkedList<>();
+    public void generate(Collection<InclusionDependency> inds,
+                                                    IndSubspaceKey indSubspaceKey,
+                                                    NaryIndRestrictions naryIndRestrictions,
+                                                    int maxArity,
+                                                    Collection<InclusionDependency> candidates) {
 
         // Put all INDs into a prefix map.
         Map<IntList, List<InclusionDependency>> prefixMap = new HashMap<>();
         for (InclusionDependency ind : inds) {
-            CollectionUtils.putIntoList(prefixMap, this.extractAprioriPrefix(ind), ind);
+            if (ind.getArity() < maxArity) {
+                CollectionUtils.putIntoList(prefixMap, this.extractAprioriPrefix(ind), ind);
+            }
         }
 
         // Process each prefix group independently.
@@ -110,9 +101,6 @@ public class AprioriCandidateGenerator implements CandidateGenerator {
                 }
             }
         }
-
-        return candidates;
-
     }
 
     /**

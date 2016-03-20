@@ -1,12 +1,13 @@
 package de.hpi.isg.sindy.util;
 
 import de.hpi.isg.mdms.domain.constraints.InclusionDependency;
+import de.hpi.isg.mdms.model.util.IdUtils;
+import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntIterator;
 import it.unimi.dsi.fastutil.ints.IntList;
 
-import java.util.Collection;
-import java.util.Comparator;
+import java.util.*;
 
 /**
  * Utilities for handling {@link InclusionDependency} objects.
@@ -88,6 +89,25 @@ public class InclusionDependencies {
             }
             collector.add(new InclusionDependency(new InclusionDependency.Reference(dep, ref)));
         }
+    }
+
+    /**
+     * Groups {@link InclusionDependency}s by their IND subspace and sorts the IND groups.
+     *
+     * @param inds    is a collection of INDs to be grouped
+     * @param idUtils to find out the tables connected by the {@link InclusionDependency}s
+     * @return a map from IND subspace descriptions to sorted IND groups
+     */
+    public static Map<IndSubspaceKey, SortedSet<InclusionDependency>> groupIntoSubspaces(
+            final Collection<InclusionDependency> inds,
+            final IdUtils idUtils) {
+        final Map<IndSubspaceKey, SortedSet<InclusionDependency>> indGroups = new HashMap<>();
+        for (InclusionDependency ind : inds) {
+            final IndSubspaceKey key = IndSubspaceKey.createFromInd(ind, idUtils);
+            final SortedSet<InclusionDependency> indGroup = indGroups.computeIfAbsent(key, k -> new TreeSet<>(COMPARATOR));
+            indGroup.add(ind);
+        }
+        return indGroups;
     }
 
 }

@@ -3,11 +3,11 @@ package de.hpi.isg.sindy.apps;
 import com.beust.jcommander.Parameter;
 import de.hpi.isg.mdms.domain.constraints.InclusionDependency;
 import de.hpi.isg.mdms.flink.apps.FlinkAppTemplate;
+import de.hpi.isg.mdms.flink.data.Tuple;
 import de.hpi.isg.mdms.flink.location.CsvFileLocation;
 import de.hpi.isg.mdms.flink.readwrite.RemoteCollectorImpl;
 import de.hpi.isg.mdms.flink.util.PlanBuildingUtils;
 import de.hpi.isg.mdms.model.constraints.Constraint;
-import de.hpi.isg.mdms.model.constraints.ConstraintCollection;
 import de.hpi.isg.mdms.model.location.Location;
 import de.hpi.isg.mdms.model.targets.Column;
 import de.hpi.isg.mdms.model.targets.Schema;
@@ -16,7 +16,10 @@ import de.hpi.isg.mdms.model.util.IdUtils;
 import de.hpi.isg.mdms.util.CollectionUtils;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.udf.*;
-import it.unimi.dsi.fastutil.ints.*;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.commons.lang3.Validate;
@@ -29,10 +32,7 @@ import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.core.fs.Path;
 
 import java.io.Serializable;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -41,11 +41,6 @@ import java.util.concurrent.TimeUnit;
  * This class gather basic functionalities used by SINDY and its derivates.
  */
 public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParameters> {
-
-    /**
-     * The constraint collection to be created by this job.
-     */
-    protected ConstraintCollection constraintCollection;
 
     /**
      * Creates a new instance.
@@ -65,7 +60,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
      */
     protected int count(DataSet<Tuple2<Integer, int[]>> inclusionDependencies) throws Exception {
         // Count the INDs.
-        return inclusionDependencies.map(new CountInds()).sum(0).collect().get(0).f0;
+        return inclusionDependencies.map(new AbstractSindy.CountInds()).sum(0).collect().get(0).f0;
     }
 
     /**
@@ -73,7 +68,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
      *
      * @return the {@link AbstractSindy.Parameters} extracted from the command-line
      */
-    abstract Parameters getBasicSindyParameters();
+    abstract AbstractSindy.Parameters getBasicSindyParameters();
 
 
     /**
@@ -84,19 +79,19 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
      * @param jobName           is the name of the Flink job that will be executed
      * @throws Exception
      */
-    protected <T> void collectAsync(final AddCommandFactory<T> addCommandFactory, DataSet<T> dependencies, String jobName) throws Exception {
+    protected <T> void collectAsync(final AbstractSindy.AddCommandFactory<T> addCommandFactory, DataSet<T> dependencies, String jobName) throws Exception {
         final ExecutorService executorService = Executors.newSingleThreadExecutor();
         RemoteCollectorImpl.collectLocal(
                 dependencies,
                 resultElement -> executorService.execute(addCommandFactory.create(resultElement))
         );
 
-        executePlan(jobName);
-        getLogger().debug("Shutting down dependency collector.");
+        this.executePlan(jobName);
+        this.getLogger().debug("Shutting down dependency collector.");
         executorService.shutdown();
-        getLogger().debug("Awaiting termination of IND store executor.");
+        this.getLogger().debug("Awaiting termination of IND store executor.");
         executorService.awaitTermination(365, TimeUnit.DAYS);
-        getLogger().debug("Shutting down RemoteCollectorImpl.");
+        this.getLogger().debug("Shutting down RemoteCollectorImpl.");
         RemoteCollectorImpl.shutdownAll();
     }
 
@@ -109,18 +104,16 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
     protected DataSet<Tuple3<Integer, Integer, int[]>> buildUnaryIndDetectionPlan(Collection<Table> tables) {
         // Read the sources.
         DataSet<Tuple2<Integer, String>> source = PlanBuildingUtils.buildCellDataSet(this.executionEnvironment,
-                tables, this.metadataStore, !getBasicSindyParameters().isSuppressEmptyValues);
-
-        final DataSet<Tuple2<Integer, String>> pivotElements = source;
+                tables, this.metadataStore, !this.getBasicSindyParameters().isSuppressEmptyValues);
 
         // For each distinct value, find the set of attributes that share this value.
-        final DataSet<int[]> attributeGroups = createAttributeGroups(pivotElements);
+        final DataSet<int[]> attributeGroups = this.createAttributeGroups(source);
 
         // Create IND candidates based on each attribute group.
-        final DataSet<Tuple3<Integer, Integer, int[]>> inclusionLists = createInclusionLists(attributeGroups);
+        final DataSet<Tuple3<Integer, Integer, int[]>> inclusionLists = this.createInclusionLists(attributeGroups);
 
         // Intersect all IND candidates with the same dependent column.
-        return intersectCandidates(inclusionLists);
+        return this.intersectCandidates(inclusionLists);
     }
 
 
@@ -133,17 +126,54 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
     protected DataSet<Tuple4<Integer, Integer, int[], int[]>> buildUnaryOverlapDetectionPlan(Collection<Table> tables) {
         // Read the sources.
         DataSet<Tuple2<Integer, String>> source = PlanBuildingUtils.buildCellDataSet(this.executionEnvironment,
-                tables, this.metadataStore, !getBasicSindyParameters().isSuppressEmptyValues);
-
-        final DataSet<Tuple2<Integer, String>> pivotElements = source;
+                tables, this.metadataStore, !this.getBasicSindyParameters().isSuppressEmptyValues);
 
         // For each distinct value, find the set of attributes that share this value.
-        final DataSet<int[]> attributeGroups = createAttributeGroups(pivotElements);
+        final DataSet<int[]> attributeGroups = this.createAttributeGroups(source);
 
         return attributeGroups
                 .flatMap(new OverlapListCreator()).name("Create overlap lists")
                 .groupBy(0)
                 .reduceGroup(new GroupMultiUnionOverlapLists()).name("Multi-union overlap lists");
+    }
+
+    /**
+     * Creates a Flink plan to verify n-ary IND candidates in a batch.
+     *
+     * @param columnCombinationIds is a mapping of IDs to column combinations
+     * @param schema               in which the columns reside
+     * @return a {@link DataSet} with n-ary INDs (grouped by dependent column combination)
+     */
+    protected DataSet<Tuple3<Integer, Integer, int[]>> buildNaryIndDetectionPlan(Object2IntMap<IntList> columnCombinationIds, Schema schema) {
+        // Find all relevant files, i.e., those that contain a column combination of the IND candidates.
+        final Set<String> relevantFiles = new HashSet<>();
+        final Set<Table> relevantTables = new HashSet<>();
+        for (final IntList columnCombination : columnCombinationIds.keySet()) {
+            int tableId = this.metadataStore.getIdUtils().getTableId(columnCombination.getInt(0));
+            Table table = schema.getTableById(tableId);
+            relevantFiles.add(this.getCsvFilePath(table).toString());
+            relevantTables.add(table);
+        }
+        final Object2IntMap<String> pathIds = this.collectPathIds(schema);
+        pathIds.keySet().retainAll(relevantFiles);
+
+        // Configure the input format.
+        DataSet<Tuple> tupleDataSet = PlanBuildingUtils.buildTupleDataSet(
+                this.executionEnvironment, relevantTables, this.metadataStore, this.getBasicSindyParameters().isSuppressEmptyValues);
+
+        // Split the lines into pivot elements.
+        final SplitFieldsToCombinations splitFields = new SplitFieldsToCombinations(
+                columnCombinationIds, this.metadataStore.getIdUtils(), this.getBasicSindyParameters().isDropNulls);
+        final DataSet<Tuple2<Integer, String>> pivotElements = tupleDataSet.flatMap(splitFields);
+
+        // For each distinct value, find the set of attributes that share this value.
+        final DataSet<int[]> attributeGroups = this.createAttributeGroups(pivotElements);
+
+        // Create IND candidates based on each attribute group.
+        final DataSet<Tuple3<Integer, Integer, int[]>> inclusionLists = this.createInclusionLists(attributeGroups);
+
+        // Intersect all IND candidates with the same dependent column.
+        return this.intersectCandidates(inclusionLists);
     }
 
     /**
@@ -165,7 +195,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
      */
     private DataSet<int[]> createAttributeGroups(final DataSet<Tuple2<Integer, String>> pivotElements) {
         final DataSet<int[]> attributeGroups;
-        if (!getBasicSindyParameters().isNotUseGroupOperators) {
+        if (!this.getBasicSindyParameters().isNotUseGroupOperators) {
             attributeGroups = pivotElements
                     .map(new CreateCells())
                     .groupBy(0)
@@ -233,7 +263,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
         final Object2IntMap<IntList> columnCombinationIds = new Object2IntOpenHashMap<>();
         columnCombinationIds.defaultReturnValue(-1);
         for (final List<InclusionDependency> indCandidates : indCandidatesByDcc.values()) {
-            columnCombinationId = createIdsForColumnCombinations2(columnCombinationId, columnCombinationIds, indCandidates);
+            columnCombinationId = this.createIdsForColumnCombinations2(columnCombinationId, columnCombinationIds, indCandidates);
         }
         return columnCombinationIds;
     }
@@ -247,7 +277,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
     protected Object2IntMap<IntList> createIdsForColumnCombinations2(Collection<InclusionDependency> indCandidates) {
         final Object2IntMap<IntList> columnCombinationIds = new Object2IntOpenHashMap<>();
         columnCombinationIds.defaultReturnValue(-1);
-        createIdsForColumnCombinations2(0, columnCombinationIds, indCandidates);
+        this.createIdsForColumnCombinations2(0, columnCombinationIds, indCandidates);
         return columnCombinationIds;
     }
 
@@ -328,6 +358,9 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
         @Parameter(names = {"--sample-rows"}, description = "how many percent of rows to take", required = false)
         public int sampleRows = -1;
 
+        @Parameter(names = {"--no-nulls"}, description = "treat values/value combinations with null as non-existent", required = false)
+        public boolean isDropNulls = false;
+
         @Parameter(names = {"--suppress-empty-values"},
                 description = "treat empty fields as non-existent",
                 required = false)
@@ -337,11 +370,6 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
                 description = "use the old operators",
                 required = false)
         public boolean isNotUseGroupOperators;
-
-        @Parameter(names = {"-v", "--verbose"},
-                description = "print detailed insights",
-                required = false)
-        public boolean isVerbose = false;
 
         @Parameter(names = {"--nary-restrictions"},
                 description = "restricts n-ary edge case INDs")
@@ -355,66 +383,6 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
             }
             throw new RuntimeException(String.format("Illegal n-ary IND restriction, choose from %s.",
                     NaryIndRestrictions.overviewString()));
-        }
-    }
-
-    /**
-     * An inclusion dependency candidate (a little more andy than {@link InclusionDependency}).
-     *
-     * @author Sebastian Kruse
-     * @deprecated resort to {@link InclusionDependency}
-     */
-    @Deprecated
-    static class NaryIndCandidate {
-
-        private final IntList dependentColumns;
-        public final IntList referencedColumns;
-
-        public NaryIndCandidate(final IntList dependentColumns, final IntList referencedColumns) {
-            this(dependentColumns, referencedColumns, true);
-        }
-
-        public NaryIndCandidate(final IntList dependentColumns, final IntList referencedColumns, boolean isValidate) {
-            if (isValidate) validateIsSorted(dependentColumns);
-            this.dependentColumns = dependentColumns;
-            this.referencedColumns = referencedColumns;
-        }
-
-        private void validateIsSorted(final IntList columns) {
-            int lastColumn = -1;
-            for (final IntIterator i = columns.iterator(); i.hasNext(); ) {
-                int currentColumn = i.nextInt();
-                if (lastColumn != -1) {
-                    if (lastColumn > currentColumn) {
-                        throw new IllegalArgumentException("Not sorted: " + columns);
-                    }
-                }
-                lastColumn = currentColumn;
-            }
-        }
-
-        InclusionDependency toInclusionDependency() {
-            return new InclusionDependency(new InclusionDependency.Reference(this.dependentColumns.toIntArray(), this.referencedColumns.toIntArray()));
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            NaryIndCandidate that = (NaryIndCandidate) o;
-
-            if (dependentColumns != null ? !dependentColumns.equals(that.dependentColumns) : that.dependentColumns != null)
-                return false;
-            return !(referencedColumns != null ? !referencedColumns.equals(that.referencedColumns) : that.referencedColumns != null);
-
-        }
-
-        @Override
-        public int hashCode() {
-            int result = dependentColumns != null ? dependentColumns.hashCode() : 0;
-            result = 31 * result + (referencedColumns != null ? referencedColumns.hashCode() : 0);
-            return result;
         }
     }
 

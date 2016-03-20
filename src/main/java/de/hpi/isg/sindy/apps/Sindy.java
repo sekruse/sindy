@@ -14,10 +14,13 @@ import de.hpi.isg.mdms.model.constraints.ConstraintCollection;
 import de.hpi.isg.mdms.model.targets.Column;
 import de.hpi.isg.mdms.model.targets.Schema;
 import de.hpi.isg.mdms.model.targets.Table;
-import de.hpi.isg.mdms.util.CollectionUtils;
+import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
+import de.hpi.isg.sindy.searchspace.CandidateGenerator;
+import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
+import de.hpi.isg.sindy.util.InclusionDependencies;
 import it.unimi.dsi.fastutil.ints.*;
-import org.apache.commons.lang3.Validate;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.tuple.Tuple2;
 
@@ -48,14 +51,21 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
     private int numAddedInds;
 
     /**
-     * The restrictions to apply during n-ary IND search.
+     * The restrictions to apply to n-ary IND discovery.
      */
     protected NaryIndRestrictions naryIndRestrictions;
+
+    /**
+     * {@link CandidateGenerator} for n-ary IND discovery.
+     */
+    protected CandidateGenerator candidateGenerator;
 
     /**
      * Makes INDs readable.
      */
     protected DependencyPrettyPrinter prettyPrinter;
+
+    private Collection<InclusionDependency> indCollector;
 
     public static void main(final String[] args) throws Exception {
         Sindy.Parameters parameters = new Sindy.Parameters();
@@ -76,14 +86,16 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
     protected void prepareAppLogic() throws Exception {
         super.prepareAppLogic();
 
-        this.naryIndRestrictions = this.getBasicSindyParameters().getNaryIndRestriction();
 
         if (this.parameters.isCountOnly && this.parameters.maxN != 1) {
             this.getLogger().warn("Counting only, will process only unary INDs.");
             this.parameters.maxN = 1;
         }
-        Validate.isTrue(this.parameters.maxN == 1, "Implementation currently allows for unary IND discovery only.");
 
+        if (this.parameters.maxN > 1) {
+            this.naryIndRestrictions = this.getBasicSindyParameters().getNaryIndRestriction();
+            this.candidateGenerator = this.parameters.getCandidateGenerator();
+        }
 
         // Load the schema that should be profiled.
         this.schema = this.getSchema(this.parameters.schemaId, this.parameters.schemaName);
@@ -119,7 +131,7 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
         }
         this.numAddedInds = 0;
 
-        if (this.getBasicSindyParameters().isVerbose) {
+        if (this.logger.isDebugEnabled()) {
             for (Table table : this.schema.getTables()) {
                 this.getLogger().info("Profiling {}->{}", table.getId(), table);
                 for (Column column : table.getColumns()) {
@@ -133,13 +145,13 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
 
     @Override
     protected void executeAppLogic() throws Exception {
-
         // Take care of the unary IND detection.
         DataSet<Tuple2<Integer, int[]>> unaryInds = this.buildUnaryIndDetectionPlan(this.schema.getTables()).project(0, 2);
         if (this.parameters.isCountOnly) {
             int numInds = this.count(unaryInds);
-            this.getLogger().info("Discovered {} unary INDs.", numInds);
+            System.out.printf("Discovered %d unary INDs.\n", numInds);
         } else {
+            this.indCollector = new LinkedList<>();
             AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addUnaryIndCommandFactory =
                     indSet ->
                             (Runnable) (() -> {
@@ -148,43 +160,118 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
                                     Sindy.this.addInclusionDependency(dependentId, referencedId);
                                 }
                             });
-            String jobName = String.format("Sindy on %s (%s)", this.schema.getName(), new Date());
+            String jobName = String.format("SINDY on %s (%s)", this.schema.getName(), new Date());
             this.collectAsync(addUnaryIndCommandFactory, unaryInds, jobName);
         }
 
-        if (this.getBasicSindyParameters().isVerbose && !this.parameters.isCountOnly) {
-            this.printInclusionDependencies();
-            this.printIndsAsCsv();
+        Collection<InclusionDependency> allInds = this.indCollector;
+
+        // Now perform n-ary IND detection using the Apriori candidate generation.
+        if (this.parameters.maxN > 1) {
+            Collection<InclusionDependency> newInds = allInds;
+            while (!newInds.isEmpty()) {
+                this.logger.info("{} INDs for n-ary IND generation.", newInds.size());
+                if (this.logger.isDebugEnabled()) {
+                    List<InclusionDependency> temp = new ArrayList<>(newInds);
+                    Collections.sort(temp, InclusionDependencies.COMPARATOR);
+                    for (InclusionDependency candidate : temp) {
+                        this.logger.debug("-> IND {}", candidate);
+                    }
+                }
+
+                // Generate n-ary IND candidates.
+                final Set<InclusionDependency> indCandidates = this.generateCandidates(newInds);
+                if (indCandidates.isEmpty()) {
+                    break;
+                }
+
+                // For any column combination in the n-ary IND candidates, create an ID.
+                final Object2IntMap<IntList> columnCombinationIds = this.createIdsForColumnCombinations2(indCandidates);
+                final Int2ObjectMap<IntList> columnCombinationsById = this.invert(columnCombinationIds);
+
+                // Build and execute the appropriate Flink job.
+                this.indCollector = new LinkedList<>();
+                DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds, this.schema).project(0, 2);
+                AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
+                        indSet ->
+                                (Runnable) () -> {
+                                    for (int referencedId : indSet.f1) {
+                                        int dependentId = indSet.f0;
+                                        Sindy.this.addInclusionDependency(dependentId, referencedId, columnCombinationsById, indCandidates);
+                                    }
+                                };
+                String jobName = String.format("SINDY (n-ary) on %s", this.schema.getName());
+                this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+
+                // Consolidate the newly discovered INDs with the existing INDs.
+                this.candidateGenerator.consolidate(allInds, this.indCollector);
+                allInds.addAll(this.indCollector);
+
+                // Prepare for the next iteration.
+                newInds = this.indCollector;
+                this.indCollector = null;
+            }
         }
 
-        this.metadataStore.flush();
+        if (!this.parameters.isCountOnly) {
+            if (this.parameters.isDryRun) {
+                this.printInclusionDependencies(allInds);
+            } else {
+                allInds.forEach(this.constraintCollection::add);
+                this.metadataStore.flush();
+            }
+        }
+
+        this.logStatistics();
     }
 
+    /**
+     * Generates n-ary {@link InclusionDependency} candidates based on a set of known {@link InclusionDependency}.
+     *
+     * @param knownInds {@link InclusionDependency}s that have been found since the last candidate generation (TODO: revise?)
+     * @return the generated {@link InclusionDependency} candidates
+     */
+    private Set<InclusionDependency> generateCandidates(Collection<InclusionDependency> knownInds) {
+        Map<IndSubspaceKey, SortedSet<InclusionDependency>> groupedInds = InclusionDependencies.groupIntoSubspaces(
+                knownInds, this.metadataStore.getIdUtils()
+        );
+        final Set<InclusionDependency> indCandidates = new HashSet<>();
+        for (Map.Entry<IndSubspaceKey, SortedSet<InclusionDependency>> entry : groupedInds.entrySet()) {
+            int oldIndCandidatesSize = indCandidates.size();
+            this.candidateGenerator.generate(
+                    entry.getValue(), entry.getKey(),
+                    this.getBasicSindyParameters().getNaryIndRestriction(),
+                    this.parameters.maxN,
+                    indCandidates
+            );
+            this.logger.debug("Generated {} candidates for {}.", indCandidates.size() - oldIndCandidatesSize, entry.getKey());
+        }
+        this.logger.info("Generated {} IND candidates.", indCandidates.size());
+        if (this.logger.isDebugEnabled()) {
+            List<InclusionDependency> temp = new ArrayList<>(indCandidates);
+            Collections.sort(temp, InclusionDependencies.COMPARATOR);
+            for (InclusionDependency candidate : temp) {
+                this.logger.debug("-> Candidate {}", candidate);
+            }
+        }
+        return indCandidates;
+    }
 
     /**
      * Prints the inclusion dependencies grouped by the dependent attribute.
      */
-    private void printInclusionDependencies() {
-        if (this.getLogger().isDebugEnabled()) {
-            Map<String, SortedSet<String>> textualInds = new HashMap<>();
-            for (Constraint constraint : this.constraintCollection.getConstraints()) {
-                InclusionDependency ind = (InclusionDependency) constraint;
-                InclusionDependency.Reference targetReference = ind.getTargetReference();
-                String dependentAttributes = Arrays.toString(targetReference.getDependentColumns());
-                String referencedAttributes = Arrays.toString(targetReference.getReferencedColumns());
-                CollectionUtils.putIntoSortedSet(textualInds, dependentAttributes, referencedAttributes);
-            }
-
-            for (Map.Entry<String, SortedSet<String>> entry : textualInds.entrySet()) {
-                this.getLogger().debug("{} < {}", entry.getKey(), entry.getValue());
-            }
+    private void printInclusionDependencies(Collection<InclusionDependency> inds) {
+        ArrayList<InclusionDependency> sortedInds = new ArrayList<>(inds);
+        sortedInds.sort(InclusionDependencies.COMPARATOR);
+        for (InclusionDependency ind : sortedInds) {
+            System.out.println(this.prettyPrinter.prettyPrint(ind));
         }
     }
 
     /**
      * Print the number of found INDs as CSV.
      */
-    private void printIndsAsCsv() {
+    private void logStatistics() {
         // Print the number of INDs on each level.
         this.getLogger().info("IND count");
         this.getLogger().info("dataset;overall;n=1;n=2;...");
@@ -281,11 +368,9 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
         }
 
 
-        this.constraintCollection.add(ind);
-        if (this.parameters.isDryRun) {
-            System.out.println(this.prettyPrinter.prettyPrint(ind));
-        } else {
-
+        this.indCollector.add(ind);
+        if (this.logger.isDebugEnabled()) {
+            this.logger.debug("Discovered {} (might be non-maximal).", this.prettyPrinter.prettyPrint(ind));
         }
 
         if (++this.numAddedInds % 1000000 == 0) {
@@ -314,6 +399,9 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
         @Parameter(names = {"--max-n"}, description = "search at max n-ary INDs", required = false)
         public int maxN = 1;
 
+        @Parameter(names = "--nary-gen", description = "n-ary IND candidate generation strategy", required = false)
+        public String candidateGenerator = "apriori";
+
         @Parameter(names = {"--count-only"},
                 description = "count INDs within Flink instead of delivering them (only for unary INDs)")
         public boolean isCountOnly;
@@ -331,7 +419,17 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
         @ParametersDelegate
         public final AbstractSindy.Parameters basicSindyParameters = new AbstractSindy.Parameters();
 
-
+        public CandidateGenerator getCandidateGenerator() {
+            switch (this.candidateGenerator) {
+                case "apriori":
+                case "mind":
+                    return new AprioriCandidateGenerator();
+                default:
+                    throw new IllegalArgumentException(String.format(
+                            "Unknown candidate generator strategy: \"%s\".", this.candidateGenerator
+                    ));
+            }
+        }
     }
 
 }
