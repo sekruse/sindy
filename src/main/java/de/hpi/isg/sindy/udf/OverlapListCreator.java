@@ -19,6 +19,8 @@ import java.util.Arrays;
  */
 public class OverlapListCreator implements FlatMapFunction<int[], Tuple4<Integer, Integer, int[], int[]>> {
 
+    // TODO: Since the overlap is symmetric, we could almost halve the output.
+
     private static final long serialVersionUID = -7892494553637141336L;
 
     private final static int[] EMPTY_ARRAY = {};

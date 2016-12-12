@@ -111,7 +111,7 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<Tuple, Tuple2
                 String field = fields[offset];
                 if (field == null) {
                     if (this.isOutputCombinationsWithNulls) {
-                        field = "";
+                        field = "\1";
                     } else {
                         continue ColumnCombinations;
                     }

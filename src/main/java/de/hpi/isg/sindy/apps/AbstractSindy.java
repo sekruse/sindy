@@ -104,7 +104,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
     protected DataSet<Tuple3<Integer, Integer, int[]>> buildUnaryIndDetectionPlan(Collection<Table> tables) {
         // Read the sources.
         DataSet<Tuple2<Integer, String>> source = PlanBuildingUtils.buildCellDataSet(this.executionEnvironment,
-                tables, this.metadataStore, !this.getBasicSindyParameters().isSuppressEmptyValues);
+                tables, this.metadataStore, !this.getBasicSindyParameters().isDropNulls);
 
         // For each distinct value, find the set of attributes that share this value.
         final DataSet<int[]> attributeGroups = this.createAttributeGroups(source);
@@ -126,7 +126,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
     protected DataSet<Tuple4<Integer, Integer, int[], int[]>> buildUnaryOverlapDetectionPlan(Collection<Table> tables) {
         // Read the sources.
         DataSet<Tuple2<Integer, String>> source = PlanBuildingUtils.buildCellDataSet(this.executionEnvironment,
-                tables, this.metadataStore, !this.getBasicSindyParameters().isSuppressEmptyValues);
+                tables, this.metadataStore, !this.getBasicSindyParameters().isDropNulls);
 
         // For each distinct value, find the set of attributes that share this value.
         final DataSet<int[]> attributeGroups = this.createAttributeGroups(source);
@@ -159,12 +159,12 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
 
         // Configure the input format.
         DataSet<Tuple> tupleDataSet = PlanBuildingUtils.buildTupleDataSet(
-                this.executionEnvironment, relevantTables, this.metadataStore, this.getBasicSindyParameters().isSuppressEmptyValues);
+                this.executionEnvironment, relevantTables, this.metadataStore, true);
 
         // Split the lines into pivot elements.
         final SplitFieldsToCombinations splitFields = new SplitFieldsToCombinations(
-                columnCombinationIds, this.metadataStore.getIdUtils(), this.getBasicSindyParameters().isDropNulls);
-        final DataSet<Tuple2<Integer, String>> pivotElements = tupleDataSet.flatMap(splitFields);
+                columnCombinationIds, this.metadataStore.getIdUtils(), !this.getBasicSindyParameters().isDropNulls);
+        final DataSet<Tuple2<Integer, String>> pivotElements = tupleDataSet.flatMap(splitFields).name("Create column combinations");
 
         // For each distinct value, find the set of attributes that share this value.
         final DataSet<int[]> attributeGroups = this.createAttributeGroups(pivotElements);
@@ -197,14 +197,14 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
         final DataSet<int[]> attributeGroups;
         if (!this.getBasicSindyParameters().isNotUseGroupOperators) {
             attributeGroups = pivotElements
-                    .map(new CreateCells())
+                    .map(new CreateCells()).name("Prepare cell merging")
                     .groupBy(0)
-                    .reduceGroup(new GroupMergeCells())
-                    .map(new ExtractAttributeGroupsFromCells());
+                    .reduceGroup(new GroupMergeCells()).name("Merge cells")
+                    .map(new ExtractAttributeGroupsFromCells()).name("Extract attribute groups");
         } else {
             attributeGroups = pivotElements
                     .groupBy(1)
-                    .reduceGroup(new UnionAttributes());
+                    .reduceGroup(new UnionAttributes()).name("Create attribute groups");
         }
 
         return attributeGroups;
@@ -214,7 +214,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
      * Creates IND candidates based on the given attribute groups.
      */
     private DataSet<Tuple3<Integer, Integer, int[]>> createInclusionLists(final DataSet<int[]> attributeGroups) {
-        return attributeGroups.flatMap(new InclusionListCreator());
+        return attributeGroups.flatMap(new InclusionListCreator()).name("Create IND candidate sets");
     }
 
     /**
@@ -224,7 +224,7 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
             final DataSet<Tuple3<Integer, Integer, int[]>> inclusionLists) {
         return inclusionLists
                 .groupBy(0)
-                .reduceGroup(new GroupIntersectCandidates());
+                .reduceGroup(new GroupIntersectCandidates()).name("Intersect IND candidate sets");
     }
 
     /**
@@ -360,11 +360,6 @@ public abstract class AbstractSindy<TParameters> extends FlinkAppTemplate<TParam
 
         @Parameter(names = {"--no-nulls"}, description = "treat values/value combinations with null as non-existent", required = false)
         public boolean isDropNulls = false;
-
-        @Parameter(names = {"--suppress-empty-values"},
-                description = "treat empty fields as non-existent",
-                required = false)
-        public boolean isSuppressEmptyValues;
 
         @Parameter(names = {"--no-group-operators"},
                 description = "use the old operators",

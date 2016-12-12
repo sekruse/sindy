@@ -357,7 +357,6 @@ public class Sindy extends AbstractSindy<Sindy.Parameters> {
 
         final InclusionDependency.Reference reference = new InclusionDependency.Reference(dependentColumns.toIntArray(), referencedColumns.toIntArray());
         InclusionDependency ind = new InclusionDependency(reference);
-        this.getLogger().info("Checking alleged {}", ind);
 
         // Check if the IND is also a valid candidate.
         if (indCandidates != null && !indCandidates.contains(ind)) {
