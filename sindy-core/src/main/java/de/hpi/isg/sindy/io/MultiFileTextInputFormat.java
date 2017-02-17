@@ -138,6 +138,8 @@ public class MultiFileTextInputFormat extends DelimitedInputFormat<IntObjectTupl
         this.encoding = retrieveEncoding(split.getPath());
         super.open(split);
 
+        // TODO: Support headers.
+
         // If this instance is configured to read a certain FileInputSplit,
         // we remember the ID of this split to output it with the read values.
         this.fileId = this.fileIdRetriever.retrieve(split);
