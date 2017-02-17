@@ -125,23 +125,37 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
     protected void executeAppLogic() throws Exception {
         this.sindy.run();
 
-        ConstraintCollection<InclusionDependency> constraintCollection = this.metadataStore.createConstraintCollection(
-                String.format("INDs from SINDY (%s)", new Date()),
-                this.metadataStore.createExperiment(
-                        String.format("SINDY on %s", this.schema.getName()),
-                        this.metadataStore.createAlgorithm(this.getClass().getCanonicalName())
-                ),
-                InclusionDependency.class,
-                this.schema
-        );
-        for (IND ind : this.sindy.getConsolidatedINDs()) {
-            InclusionDependency.buildAndAddToCollection(
-                    new InclusionDependency.Reference(ind.getDependentColumns(), ind.getReferencedColumns()),
-                    constraintCollection
-            );
-        }
+        if (this.sindy.isOnlyCountInds()) {
+            System.out.printf("Counted %,d INDs.\n", this.sindy.getNumDiscoveredInds());
 
-        this.metadataStore.flush();
+        } else if (this.parameters.isDryRun) {
+            System.out.printf("Discovered INDs:\n");
+            for (IND ind : this.sindy.getConsolidatedINDs()) {
+                InclusionDependency inclusionDependency = new InclusionDependency(
+                        new InclusionDependency.Reference(ind.getDependentColumns(), ind.getReferencedColumns())
+                );
+                System.out.printf("* %s\n", this.prettyPrinter.prettyPrint(inclusionDependency));
+            }
+
+        } else {
+            ConstraintCollection<InclusionDependency> constraintCollection = this.metadataStore.createConstraintCollection(
+                    String.format("INDs from SINDY (%s)", new Date()),
+                    this.metadataStore.createExperiment(
+                            String.format("SINDY on %s", this.schema.getName()),
+                            this.metadataStore.createAlgorithm(this.getClass().getCanonicalName())
+                    ),
+                    InclusionDependency.class,
+                    this.schema
+            );
+            for (IND ind : this.sindy.getConsolidatedINDs()) {
+                InclusionDependency.buildAndAddToCollection(
+                        new InclusionDependency.Reference(ind.getDependentColumns(), ind.getReferencedColumns()),
+                        constraintCollection
+                );
+            }
+
+            this.metadataStore.flush();
+        }
     }
 
     @Override

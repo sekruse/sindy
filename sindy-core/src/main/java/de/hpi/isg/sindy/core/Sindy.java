@@ -106,7 +106,7 @@ public class Sindy extends AbstractSindy implements Runnable {
         Collection<IND> newInds = this.newInds;
         this.allInds = this.newInds;
         int newArity = 2;
-        while (!newInds.isEmpty() && (newArity < this.maxArity || this.maxArity == -1)) {
+        while (this.newInds != null && !newInds.isEmpty() && (newArity < this.maxArity || this.maxArity == -1)) {
             this.logger.info("{} INDs for n-ary IND generation.", newInds.size());
             if (this.logger.isDebugEnabled()) {
                 List<IND> temp = new ArrayList<>(newInds);
