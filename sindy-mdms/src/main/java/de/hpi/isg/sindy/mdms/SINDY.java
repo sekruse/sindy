@@ -131,9 +131,7 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
         } else if (this.parameters.isDryRun) {
             System.out.printf("Discovered INDs:\n");
             for (IND ind : this.sindy.getConsolidatedINDs()) {
-                InclusionDependency inclusionDependency = new InclusionDependency(
-                        new InclusionDependency.Reference(ind.getDependentColumns(), ind.getReferencedColumns())
-                );
+                InclusionDependency inclusionDependency = new InclusionDependency(ind.getDependentColumns(), ind.getReferencedColumns());
                 System.out.printf("* %s\n", this.prettyPrinter.prettyPrint(inclusionDependency));
             }
 
@@ -148,10 +146,7 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
                     this.schema
             );
             for (IND ind : this.sindy.getConsolidatedINDs()) {
-                InclusionDependency.buildAndAddToCollection(
-                        new InclusionDependency.Reference(ind.getDependentColumns(), ind.getReferencedColumns()),
-                        constraintCollection
-                );
+                constraintCollection.add(new InclusionDependency(ind.getDependentColumns(), ind.getReferencedColumns()));
             }
 
             this.metadataStore.flush();
