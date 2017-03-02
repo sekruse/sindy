@@ -103,13 +103,12 @@ public class Sindy extends AbstractSindy implements Runnable {
         }
 
         // Now perform n-ary IND detection using the Apriori candidate generation.
-        Collection<IND> newInds = this.newInds;
         this.allInds = this.newInds;
         int newArity = 2;
-        while (this.newInds != null && !newInds.isEmpty() && (newArity < this.maxArity || this.maxArity == -1)) {
-            this.logger.info("{} INDs for n-ary IND generation.", newInds.size());
+        while (this.newInds != null && !this.newInds.isEmpty() && (newArity < this.maxArity || this.maxArity == -1)) {
+            this.logger.info("{} INDs for n-ary IND generation.", this.newInds.size());
             if (this.logger.isDebugEnabled()) {
-                List<IND> temp = new ArrayList<>(newInds);
+                List<IND> temp = new ArrayList<>(this.newInds);
                 temp.sort(INDs.COMPARATOR);
                 if (this.logger.isDebugEnabled()) {
                     for (IND candidate : temp) {
@@ -119,7 +118,7 @@ public class Sindy extends AbstractSindy implements Runnable {
             }
 
             // Generate n-ary IND candidates.
-            final Set<IND> indCandidates = this.generateCandidates(newInds);
+            final Set<IND> indCandidates = this.generateCandidates(this.newInds);
             if (indCandidates.isEmpty()) {
                 break;
             }
@@ -147,7 +146,6 @@ public class Sindy extends AbstractSindy implements Runnable {
             this.allInds.addAll(this.newInds);
 
             // Prepare for the next iteration.
-
             newArity++;
         }
     }
