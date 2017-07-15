@@ -93,10 +93,11 @@ public class RemoteCollectorImpl<T> extends UnicastRemoteObject implements
                     if (!inetAddress.isLoopbackAddress()
                             && inetAddress instanceof Inet4Address) {
                         ip = inetAddress.getHostAddress();
-                        System.setProperty("java.rmi.server.hostname", ip);
                     }
                 }
             }
+            if (ip == null) ip = "localhost";
+            System.setProperty("java.rmi.server.hostname", ip);
         }
 
         // get some random free port
