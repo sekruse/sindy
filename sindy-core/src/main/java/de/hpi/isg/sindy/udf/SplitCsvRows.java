@@ -14,7 +14,9 @@ import java.util.List;
  * index.
  *
  * @author Sebastian Kruse
+ * @deprecated Use {@link SplitCsvRowsWithOpenCsv} instead.
  */
+@Deprecated
 public class SplitCsvRows extends RichFlatMapFunction<IntObjectTuple<String>, IntObjectTuple<String>> {
 
     private static final long serialVersionUID = 1377116120504051734L;

@@ -13,7 +13,9 @@ import java.util.List;
  * Parses a CSV row into a {@link IntObjectTuple}.
  *
  * @author Sebastian Kruse
+ * @deprecated Use {@link ParseCsvRowsWithOpenCsv} instaed.
  */
+@Deprecated
 @FunctionAnnotation.ForwardedFields("a -> a")
 public class ParseCsvRows implements MapFunction<IntObjectTuple<String>, IntObjectTuple<String[]>> {
 

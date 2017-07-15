@@ -104,12 +104,32 @@ public abstract class AbstractSindy {
     /**
      * CSV quote char.
      */
-    private char quoteChar = '\0';
+    private char quoteChar;
+
+    /**
+     * CSV escape character (used in some dialects).
+     */
+    private char escapeChar;
+
+    /**
+     * Whether to trim (leading) content outside of quotes when parsing CSV rows.
+     */
+    private boolean isUseStrictQuotes;
+
+    /**
+     * Whether to ignore leading whitespace when parsing CSV rows.
+     */
+    private boolean isIgnoreLeadingWhiteSpace;
+
+    /**
+     * Whether to ignore lines that cannot be parsed or do not have the expected number of fields (otherwise fail).
+     */
+    private boolean isDropDifferingLines;
 
     /**
      * Representation of {@code NULL} values. If set to {@code null}, then this setting does not apply.
      */
-    private String nullString = null;
+    private String nullString;
 
     /**
      * The encoding of the CSV files.
@@ -200,11 +220,14 @@ public abstract class AbstractSindy {
         }
 
         // Split the lines into pivot elements.
-        SplitCsvRows splitRowsFunction = new SplitCsvRows(
+        SplitCsvRowsWithOpenCsv splitRowsFunction = new SplitCsvRowsWithOpenCsv(
                 this.fieldSeparator,
                 this.quoteChar,
+                this.escapeChar,
+                this.isUseStrictQuotes,
+                this.isIgnoreLeadingWhiteSpace,
+                this.isDropDifferingLines,
                 null,
-                -1,
                 this.maxColumns,
                 this.nullString,
                 this.isDropNulls
@@ -255,13 +278,20 @@ public abstract class AbstractSindy {
             this.logger.warn("Sampling is currently not implemented.");
         }
 
-        // Split the lines into pivot elements.
-        ParseCsvRows parseCsvRows = new ParseCsvRows(
+        // Transform the CSV data into fields.
+        ParseCsvRowsWithOpenCsv parseCsvRows = new ParseCsvRowsWithOpenCsv(
                 this.fieldSeparator,
                 this.quoteChar,
-                this.nullString
+                this.escapeChar,
+                this.isUseStrictQuotes,
+                this.isIgnoreLeadingWhiteSpace,
+                this.isDropDifferingLines,
+                null,
+                this.maxColumns,
+                this.nullString,
+                this.isDropNulls
         );
-        final DataSet<IntObjectTuple<String[]>> tuples = source.map(parseCsvRows).name("Parse rows");
+        final DataSet<IntObjectTuple<String[]>> tuples = source.flatMap(parseCsvRows).name("Parse rows");
         tableDataSets.add(tuples);
 
         // Union all different datasets.
@@ -659,6 +689,38 @@ public abstract class AbstractSindy {
 
     public void setNullString(String nullString) {
         this.nullString = nullString;
+    }
+
+    public char getEscapeChar() {
+        return this.escapeChar;
+    }
+
+    public void setEscapeChar(char escapeChar) {
+        this.escapeChar = escapeChar;
+    }
+
+    public boolean isUseStrictQuotes() {
+        return this.isUseStrictQuotes;
+    }
+
+    public void setUseStrictQuotes(boolean useStrictQuotes) {
+        this.isUseStrictQuotes = useStrictQuotes;
+    }
+
+    public boolean isIgnoreLeadingWhiteSpace() {
+        return this.isIgnoreLeadingWhiteSpace;
+    }
+
+    public void setIgnoreLeadingWhiteSpace(boolean ignoreLeadingWhiteSpace) {
+        this.isIgnoreLeadingWhiteSpace = ignoreLeadingWhiteSpace;
+    }
+
+    public boolean isDropDifferingLines() {
+        return this.isDropDifferingLines;
+    }
+
+    public void setDropDifferingLines(boolean dropDifferingLines) {
+        this.isDropDifferingLines = dropDifferingLines;
     }
 
     public Encoding getEncoding() {

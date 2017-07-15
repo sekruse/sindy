@@ -1,5 +1,6 @@
 package de.hpi.isg.sindy.metanome;
 
+import au.com.bytecode.opencsv.CSVParser;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValue;
@@ -159,7 +160,11 @@ public class SINDY implements InclusionDependencyAlgorithm,
             ConfigurationSettingFileInput setting = fileInputGenerator.getSetting();
             sindy.setFieldSeparator(setting.getSeparatorAsChar());
             sindy.setQuoteChar(setting.getQuoteCharAsChar());
+            sindy.setEscapeChar(setting.getEscapeCharAsChar());
             sindy.setNullString(setting.getNullValue());
+            sindy.setDropDifferingLines(setting.isSkipDifferingLines());
+            sindy.setIgnoreLeadingWhiteSpace(setting.isIgnoreLeadingWhiteSpace());
+            sindy.setUseStrictQuotes(setting.isStrictQuotes());
         } else {
             System.err.println("Could not read CSV settings from Metanome configuration.");
         }
@@ -191,12 +196,13 @@ public class SINDY implements InclusionDependencyAlgorithm,
      *
      * @return the readily configured {@link ExecutionEnvironment}
      */
-    private ExecutionEnvironment createExecutionEnvironment() {
+    private ExecutionEnvironment createExecutionEnvironment() throws AlgorithmExecutionException {
         // Load a config if any.
         Configuration flinkConfiguration = this.flinkConfig != null
                 ? parseTypeSafeConfig(new File(this.flinkConfig))
                 : new Configuration();
-        if (this.parallelism != -1) flinkConfiguration.setInteger(ConfigConstants.DEFAULT_PARALLELISM_KEY, this.parallelism);
+        if (this.parallelism != -1)
+            flinkConfiguration.setInteger(ConfigConstants.DEFAULT_PARALLELISM_KEY, this.parallelism);
 
         // Create a default or a remote execution environment.
         ExecutionEnvironment executionEnvironment;
@@ -205,21 +211,38 @@ public class SINDY implements InclusionDependencyAlgorithm,
         } else {
             String[] hostAndPort = this.flinkMaster.split(":");
             Set<String> jars = new HashSet<>();
-            // Get the SINDY jar.
-            jars.add(this.getClass().getProtectionDomain().getCodeSource().getLocation().getFile());
-            // Get the fastutils jar.
-            jars.add(IntCollection.class.getProtectionDomain().getCodeSource().getLocation().getFile());
             executionEnvironment = ExecutionEnvironment.createRemoteEnvironment(
                     hostAndPort[0],
                     Integer.parseInt(hostAndPort[1]),
                     flinkConfiguration,
-                    jars.toArray(new String[jars.size()])
+                    collectContainingJars(this.getClass(), IntCollection.class, CSVParser.class)
             );
         }
 
         if (this.parallelism != -1) executionEnvironment.setParallelism(this.parallelism);
 
         return executionEnvironment;
+    }
+
+    /**
+     * Collects the JAR files that the given {@code classes} reside in.
+     *
+     * @param classes {@link Class}es
+     * @return an array of paths to the JAR files
+     * @throws AlgorithmExecutionException if any of the {@link Class}es does not reside in a JAR file
+     */
+    private static String[] collectContainingJars(Class<?>... classes) throws AlgorithmExecutionException {
+        Set<String> jars = new HashSet<>();
+        for (Class<?> cls : classes) {
+            String file = cls.getProtectionDomain().getCodeSource().getLocation().getFile();
+            if (!file.endsWith(".jar")) {
+                throw new AlgorithmExecutionException(String.format(
+                        "%s does not reside in a JAR file (but in %s).", cls, file
+                ));
+            }
+            jars.add(file);
+        }
+        return jars.toArray(new String[jars.size()]);
     }
 
     /**
