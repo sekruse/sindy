@@ -4,9 +4,10 @@ import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
 import de.hpi.isg.sindy.util.IND;
 import de.hpi.isg.sindy.util.INDs;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.IntList;
+import de.hpi.isg.sindy.util.TableWidthAccumulator;
+import it.unimi.dsi.fastutil.ints.*;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -30,6 +31,11 @@ public class Sindy extends AbstractSindy implements Runnable {
      * Accepts INDs as soon as they are available.
      */
     private Consumer<IND> indCollector;
+
+    /**
+     * Keeps track of seen dependent columns or column combinations. This helps to detect "empty" column or column combinations.
+     */
+    private IntSet seenDependentIds;
 
     /**
      * Collects INDs so as to generate candidates of higher arity.
@@ -91,15 +97,37 @@ public class Sindy extends AbstractSindy implements Runnable {
             this.logger.info("Discovered {} unary INDs.", numInds);
         } else {
             this.newInds = new ArrayList<>();
+            this.seenDependentIds = new IntOpenHashSet();
             AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addUnaryIndCommandFactory = indSet ->
                     (Runnable) (() -> {
                         for (int referencedId : indSet.f1) {
                             int dependentId = indSet.f0;
                             Sindy.this.collectUnaryInd(dependentId, referencedId);
                         }
+                        this.seenDependentIds.add(indSet.f0);
                     });
             String jobName = String.format("SINDY on %d tables (unary, %s)", this.inputFiles.size(), new Date());
             this.collectAsync(addUnaryIndCommandFactory, unaryInds, jobName);
+
+            // Detect empty columns and add appropriate INDs.
+            JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
+            Int2IntOpenHashMap numColumnsByTableId = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
+            IntList allColumnIds = new IntArrayList();
+            for (Map.Entry<Integer, Integer> entry : numColumnsByTableId.int2IntEntrySet()) {
+                int columnId = entry.getKey();
+                for (int i = 0; i < entry.getValue(); i++) {
+                    allColumnIds.add(columnId + i);
+                }
+            }
+            for (IntIterator depIter = allColumnIds.iterator(); depIter.hasNext(); ) {
+                int depId = depIter.nextInt();
+                if (!this.seenDependentIds.contains(depId)) {
+                    for (IntIterator refIter = allColumnIds.iterator(); refIter.hasNext(); ) {
+                        int refId = refIter.nextInt();
+                        if (depId != refId) this.collectUnaryInd(depId, refId);
+                    }
+                }
+            }
         }
 
         // Now perform n-ary IND detection using the Apriori candidate generation.

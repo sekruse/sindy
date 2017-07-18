@@ -2,6 +2,7 @@ package de.hpi.isg.sindy.udf;
 
 import au.com.bytecode.opencsv.CSVParser;
 import de.hpi.isg.sindy.data.IntObjectTuple;
+import de.hpi.isg.sindy.util.TableWidthAccumulator;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.configuration.Configuration;
@@ -39,6 +40,8 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
     private final String nullString;
     private final boolean isDropDifferingLines;
 
+    private TableWidthAccumulator tableWidthAccumulator;
+
     /**
      * Creates a new instance without limitation of used fields.
      *
@@ -74,6 +77,8 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
         this.csvParser = new CSVParser(this.separator, this.quoteChar, this.escapeChar, this.strictQuotes, this.ignoreLeadingWhiteSpace);
+        this.tableWidthAccumulator = new TableWidthAccumulator();
+        this.getRuntimeContext().addAccumulator(TableWidthAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
     }
 
     @Override
@@ -101,6 +106,7 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
                 ));
             }
         }
+        this.tableWidthAccumulator.add(new IntObjectTuple<>(fileId, fields.length));
 
         // Forward the parsed values.
         int numFieldsToRead = (this.maxFields >= 0) ? this.maxFields : fields.length;

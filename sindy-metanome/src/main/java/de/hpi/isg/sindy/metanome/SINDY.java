@@ -13,10 +13,7 @@ import de.metanome.algorithm_integration.AlgorithmConfigurationException;
 import de.metanome.algorithm_integration.AlgorithmExecutionException;
 import de.metanome.algorithm_integration.ColumnIdentifier;
 import de.metanome.algorithm_integration.ColumnPermutation;
-import de.metanome.algorithm_integration.algorithm_types.FileInputParameterAlgorithm;
-import de.metanome.algorithm_integration.algorithm_types.InclusionDependencyAlgorithm;
-import de.metanome.algorithm_integration.algorithm_types.IntegerParameterAlgorithm;
-import de.metanome.algorithm_integration.algorithm_types.StringParameterAlgorithm;
+import de.metanome.algorithm_integration.algorithm_types.*;
 import de.metanome.algorithm_integration.configuration.ConfigurationRequirement;
 import de.metanome.algorithm_integration.configuration.ConfigurationRequirementFileInput;
 import de.metanome.algorithm_integration.configuration.ConfigurationSettingFileInput;
@@ -40,7 +37,7 @@ import java.util.*;
  * Metanome interface for the {@link Sindy} algorithm.
  */
 public class SINDY implements InclusionDependencyAlgorithm,
-        StringParameterAlgorithm, IntegerParameterAlgorithm, FileInputParameterAlgorithm {
+        StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm, FileInputParameterAlgorithm {
 
     private FileInputGenerator[] fileInputGenerators;
 
@@ -62,7 +59,7 @@ public class SINDY implements InclusionDependencyAlgorithm,
      * @see de.hpi.isg.sindy.core.Sindy#isDropNulls
      */
     @MetanomeProperty
-    private boolean isDropNulls;
+    private boolean isDropNulls = true;
 
     /**
      * @see de.hpi.isg.sindy.core.Sindy#isNotUseGroupOperators
@@ -210,7 +207,6 @@ public class SINDY implements InclusionDependencyAlgorithm,
             executionEnvironment = ExecutionEnvironment.createLocalEnvironment(flinkConfiguration);
         } else {
             String[] hostAndPort = this.flinkMaster.split(":");
-            Set<String> jars = new HashSet<>();
             executionEnvironment = ExecutionEnvironment.createRemoteEnvironment(
                     hostAndPort[0],
                     Integer.parseInt(hostAndPort[1]),
@@ -379,6 +375,11 @@ public class SINDY implements InclusionDependencyAlgorithm,
 
     @Override
     public void setIntegerConfigurationValue(String identifier, Integer... values) throws AlgorithmConfigurationException {
+        this.getPropertyLedger().configure(this, identifier, (Object[]) values);
+    }
+
+    @Override
+    public void setBooleanConfigurationValue(String identifier, Boolean... values) throws AlgorithmConfigurationException {
         this.getPropertyLedger().configure(this, identifier, (Object[]) values);
     }
 

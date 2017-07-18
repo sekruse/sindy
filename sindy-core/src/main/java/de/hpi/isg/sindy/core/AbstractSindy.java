@@ -162,7 +162,7 @@ public abstract class AbstractSindy {
     /**
      * Whether inclusion dependencies should only be counted rather than collected.
      */
-    protected boolean isOnlyCountInds = false;
+    protected boolean isOnlyCountInds;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Code.                                                                                                          //
@@ -205,7 +205,7 @@ public abstract class AbstractSindy {
                 new MultiFileTextInputFormat.ListBasedFileIdRetriever(paths2minColumnId);
         MultiFileTextInputFormat inputFormat;
         inputFormat = new MultiFileTextInputFormat(fileIdRetriever, fileIdRetriever, null);
-        inputFormat.setEncoding(encoding);
+        inputFormat.setEncoding(this.encoding);
         inputFormat.setFilePath(inputPath);
         // TODO: Enable if needed.
 //                inputFormat.setRecordDetector(new CsvRecordStateMachine(csvParameters.getFieldSeparatorChar(),
