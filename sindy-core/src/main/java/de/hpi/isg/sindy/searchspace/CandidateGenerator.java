@@ -2,6 +2,7 @@ package de.hpi.isg.sindy.searchspace;
 
 
 import de.hpi.isg.sindy.util.IND;
+import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.Collection;
 import java.util.LinkedList;
@@ -18,14 +19,16 @@ public interface CandidateGenerator {
      * @param inds                is a collection of valid INDs of a single IND subspace
      * @param indSubspaceKey      describes this IND subspace
      * @param naryIndRestrictions that should be applied to the candidate generation
+     * @param emptyColumnIds      IDs of columns without any content
      * @return all generated IND candidates
      */
     default Collection<IND> generate(Collection<IND> inds,
                                      IndSubspaceKey indSubspaceKey,
                                      NaryIndRestrictions naryIndRestrictions,
+                                     IntSet emptyColumnIds,
                                      int maxArity) {
         Collection<IND> collector = new LinkedList<>();
-        this.generate(inds, indSubspaceKey, naryIndRestrictions, maxArity, collector);
+        this.generate(inds, indSubspaceKey, naryIndRestrictions, emptyColumnIds, maxArity, collector);
         return collector;
     }
 
@@ -35,11 +38,13 @@ public interface CandidateGenerator {
      * @param inds                is a collection of valid INDs of a single IND subspace
      * @param indSubspaceKey      describes this IND subspace
      * @param naryIndRestrictions that should be applied to the candidate generation
-     * @@param collector collects all generated IND candidates
+     * @param emptyColumnIds      IDs of columns without any content
+     * @param collector           collects all generated IND candidates
      */
     void generate(Collection<IND> inds,
                   IndSubspaceKey indSubspaceKey,
                   NaryIndRestrictions naryIndRestrictions,
+                  IntSet emptyColumnIds,
                   int maxArity,
                   Collection<IND> collector);
 

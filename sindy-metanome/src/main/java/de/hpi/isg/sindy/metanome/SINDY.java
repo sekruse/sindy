@@ -7,6 +7,7 @@ import com.typesafe.config.ConfigValue;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.properties.MetanomePropertyLedger;
+import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
 import de.metanome.algorithm_integration.AlgorithmConfigurationException;
@@ -66,6 +67,12 @@ public class SINDY implements InclusionDependencyAlgorithm,
      */
     @MetanomeProperty
     private boolean isNotUseGroupOperators;
+
+    /**
+     * @see Sindy#candidateGenerator
+     */
+    @MetanomeProperty
+    private String candidateGenerator = "binder";
 
     /**
      * @see Sindy#maxArity
@@ -151,6 +158,17 @@ public class SINDY implements InclusionDependencyAlgorithm,
         // Configure Sindy.
         Sindy sindy = new Sindy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
+        switch (this.candidateGenerator) {
+            case "mind":
+            case "apriori":
+                sindy.setCandidateGenerator(new AprioriCandidateGenerator(false));
+                break;
+            case "binder":
+                sindy.setCandidateGenerator(new AprioriCandidateGenerator(true));
+                break;
+            default:
+                throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
+        }
         sindy.setMaxArity(this.maxArity);
         if (this.fileInputGenerators[0] instanceof DefaultFileInputGenerator) {
             DefaultFileInputGenerator fileInputGenerator = (DefaultFileInputGenerator) this.fileInputGenerators[0];

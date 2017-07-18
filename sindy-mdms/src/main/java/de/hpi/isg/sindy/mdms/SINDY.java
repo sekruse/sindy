@@ -204,7 +204,9 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
             switch (this.candidateGenerator) {
                 case "apriori":
                 case "mind":
-                    return new AprioriCandidateGenerator();
+                    return new AprioriCandidateGenerator(false);
+                case "binder":
+                    return new AprioriCandidateGenerator(true);
                 default:
                     throw new IllegalArgumentException(String.format(
                             "Unknown candidate generator strategy: \"%s\".", this.candidateGenerator

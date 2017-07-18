@@ -38,6 +38,11 @@ public class Sindy extends AbstractSindy implements Runnable {
     private IntSet seenDependentIds;
 
     /**
+     * Keeps track of columns that do not contain any values (apart from {@code null} values).
+     */
+    private IntSet emptyColumnIds;
+
+    /**
      * Collects INDs so as to generate candidates of higher arity.
      */
     private Collection<IND> newInds, allInds;
@@ -110,6 +115,7 @@ public class Sindy extends AbstractSindy implements Runnable {
             this.collectAsync(addUnaryIndCommandFactory, unaryInds, jobName);
 
             // Detect empty columns and add appropriate INDs.
+            this.emptyColumnIds = new IntOpenHashSet();
             JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
             Int2IntOpenHashMap numColumnsByTableId = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
             IntList allColumnIds = new IntArrayList();
@@ -122,6 +128,7 @@ public class Sindy extends AbstractSindy implements Runnable {
             for (IntIterator depIter = allColumnIds.iterator(); depIter.hasNext(); ) {
                 int depId = depIter.nextInt();
                 if (!this.seenDependentIds.contains(depId)) {
+                    this.emptyColumnIds.add(depId);
                     for (IntIterator refIter = allColumnIds.iterator(); refIter.hasNext(); ) {
                         int refId = refIter.nextInt();
                         if (depId != refId) this.collectUnaryInd(depId, refId);
@@ -157,17 +164,42 @@ public class Sindy extends AbstractSindy implements Runnable {
 
             // Build and execute the appropriate Flink job.
             this.newInds = new ArrayList<>();
+            this.seenDependentIds.clear();
             DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds).project(0, 2);
             AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
                     indSet ->
                             (Runnable) () -> {
+                                int dependentId = indSet.f0;
                                 for (int referencedId : indSet.f1) {
-                                    int dependentId = indSet.f0;
                                     Sindy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
                                 }
+                                this.seenDependentIds.add(dependentId);
                             };
             String jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
             this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+
+            // Detect empty columns and add appropriate INDs.
+            // Index the INDs by their dependent columns.
+            Int2ObjectMap<Collection<IND>> indCandidatesByDepId = new Int2ObjectOpenHashMap<>();
+            for (IND indCandidate : indCandidates) {
+                IntList depColumns = IntArrayList.wrap(indCandidate.getDependentColumns());
+                int depId = columnCombinationIds.getInt(depColumns);
+                Collection<IND> indCandidatesForDep = indCandidatesByDepId.get(depId);
+                if (indCandidatesForDep == null) {
+                    indCandidatesForDep = new ArrayList<>();
+                    indCandidatesByDepId.put(depId, indCandidatesForDep);
+                }
+                indCandidatesForDep.add(indCandidate);
+            }
+            // Create INDs for all unseen dependent column INDs.
+            for (Int2ObjectMap.Entry<Collection<IND>> entry : indCandidatesByDepId.int2ObjectEntrySet()) {
+                int depId = entry.getIntKey();
+                if (!this.seenDependentIds.contains(depId)) {
+                    for (IND indCandidate : entry.getValue()) {
+                        this.collectInd(indCandidate);
+                    }
+                }
+            }
 
             // Consolidate the newly discovered INDs with the existing INDs.
             this.candidateGenerator.consolidate(this.allInds, this.newInds);
@@ -192,6 +224,7 @@ public class Sindy extends AbstractSindy implements Runnable {
             this.candidateGenerator.generate(
                     entry.getValue(), entry.getKey(),
                     this.naryIndRestrictions,
+                    this.emptyColumnIds,
                     this.maxArity,
                     indCandidates
             );
@@ -260,7 +293,15 @@ public class Sindy extends AbstractSindy implements Runnable {
             return;
         }
 
+        this.collectInd(ind);
+    }
 
+    /**
+     * Collect an {@link IND}.
+     *
+     * @param ind the {@link IND}
+     */
+    private void collectInd(IND ind) {
         if (this.indCollector != null) this.indCollector.accept(ind);
         this.newInds.add(ind);
 

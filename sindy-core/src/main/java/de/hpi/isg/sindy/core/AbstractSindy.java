@@ -90,7 +90,7 @@ public abstract class AbstractSindy {
     /**
      * {@link CandidateGenerator} for n-ary IND discovery.
      */
-    protected CandidateGenerator candidateGenerator = new AprioriCandidateGenerator();
+    protected CandidateGenerator candidateGenerator;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Parsing configuration.                                                                                         //

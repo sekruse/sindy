@@ -4,24 +4,42 @@ import de.hpi.isg.sindy.util.IND;
 import de.hpi.isg.sindy.util.INDs;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.*;
 
 /**
  * Generates {@link IND} candidates in an Apriori manner (as described for the MIND algorithm).
+ * In addition,
  */
 public class AprioriCandidateGenerator implements CandidateGenerator {
+
+    private final boolean isDropEmptyDependentColumns;
+
+    public AprioriCandidateGenerator(boolean isDropEmptyDependentColumns) {
+        this.isDropEmptyDependentColumns = isDropEmptyDependentColumns;
+    }
+
 
     @Override
     public void generate(Collection<IND> inds,
                          IndSubspaceKey indSubspaceKey,
                          NaryIndRestrictions naryIndRestrictions,
+                         IntSet emptyColumnIds,
                          int maxArity,
                          Collection<IND> candidates) {
 
         // Put all INDs into a prefix map.
         Map<IntList, List<IND>> prefixMap = new HashMap<>();
+        PrefixGrouping:
         for (IND ind : inds) {
+            // Ensure that the dependent columns are non-empty.
+            if (this.isDropEmptyDependentColumns) {
+                for (int depColumn : ind.getDependentColumns()) {
+                    if (emptyColumnIds.contains(depColumn)) continue PrefixGrouping;
+                }
+            }
+
             if (ind.getArity() < maxArity || maxArity == -1) {
                 IntList prefix = this.extractAprioriPrefix(ind);
                 List<IND> prefixGroup = prefixMap.computeIfAbsent(prefix, k -> new ArrayList<>());
