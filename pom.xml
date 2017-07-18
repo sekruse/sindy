@@ -19,7 +19,17 @@
         <mdms.version>0.0.3-SNAPSHOT</mdms.version>
         <metanome.version>1.1-SNAPSHOT</metanome.version>
         <flink.version>0.10.2</flink.version>
+        <logging.scope>test</logging.scope>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>logging</id>
+            <properties>
+                <logging.scope>compile</logging.scope>
+            </properties>
+        </profile>
+    </profiles>
 
     <build>
         <pluginManagement>
@@ -145,7 +155,7 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-simple</artifactId>
                 <version>1.7.13</version>
-                <scope>test</scope>
+                <scope>${logging.scope}</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
