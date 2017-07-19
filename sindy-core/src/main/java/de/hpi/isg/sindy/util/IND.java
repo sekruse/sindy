@@ -54,6 +54,40 @@ public class IND {
         return Arrays.equals(this.dependentColumns, this.referencedColumns);
     }
 
+    /**
+     * Checks whether this instance is implied by another instance.
+     *
+     * @param that is the allegedly implying instance
+     * @return whether this instance is implied
+     */
+    public boolean isImpliedBy(IND that) {
+        if (this.getArity() > that.getArity()) {
+            return false;
+        }
+
+        // Co-iterate the two INDs and make use of the sorting of the column IDs.
+        int thisI = 0, thatI = 0;
+        while (thisI < this.getArity() && thatI < that.getArity() && (this.getArity() - thisI <= that.getArity() - thatI)) {
+            int thisCol = this.dependentColumns[thisI];
+            int thatCol = that.dependentColumns[thatI];
+            if (thisCol == thatCol) {
+                thisCol = this.referencedColumns[thisI];
+                thatCol = that.referencedColumns[thatI];
+            }
+            if (thisCol == thatCol) {
+                thisI++;
+                thatI++;
+            } else if (thisCol > thatCol) {
+                thatI++;
+            } else {
+                return false;
+            }
+        }
+
+        return thisI == this.getArity();
+    }
+
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
