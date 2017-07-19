@@ -2,6 +2,10 @@ package de.hpi.isg.sindy.core;
 
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
+import de.hpi.isg.sindy.searchspace.OptimisticCandidateGenerator;
+import de.hpi.isg.sindy.searchspace.ZigZagSubspace;
+import de.hpi.isg.sindy.searchspace.hypergraph.NaryInd;
+import de.hpi.isg.sindy.searchspace.hypergraph.UnaryInd;
 import de.hpi.isg.sindy.util.IND;
 import de.hpi.isg.sindy.util.INDs;
 import de.hpi.isg.sindy.util.TableWidthAccumulator;
@@ -48,6 +52,17 @@ public class Sindy extends AbstractSindy implements Runnable {
     private Collection<IND> newInds, allInds;
 
     /**
+     * The maximum arity of IND candidates to be checked with a breadth-first search strategy.
+     */
+    private int maxBfsArity = -1;
+
+    /**
+     * Candidate generator to use when proceeding optimistically through the search space by leaping "over" several
+     * IND candidates.
+     */
+    private OptimisticCandidateGenerator<ZigZagSubspace> optimisticCandidateGenerator;
+
+    /**
      * Creates a new instance.
      *
      * @param inputFiles           input files with their table IDs; see {@link #inputFiles}
@@ -90,7 +105,37 @@ public class Sindy extends AbstractSindy implements Runnable {
             }
         }
 
+        if (this.maxArity >= 1) {
+            if (this.maxBfsArity == -1 || this.maxBfsArity > this.maxArity) {
+                this.maxBfsArity = this.maxArity;
+                this.logger.info("Setting maximum BFS arity to {}.", this.maxBfsArity);
+            }
+        }
+
+        if (this.isConfiguredForMixedTraversal()) {
+            if (this.optimisticCandidateGenerator == null) {
+                throw new IllegalStateException(
+                        "Should process some levels optimistically, but an optimistic candidate generator has not been configured."
+                );
+            }
+            if (this.columnBitMask == 0x0) {
+                throw new IllegalStateException(
+                        "Should process some levels optimistically, but a column bit mask has not been configured."
+                );
+            }
+        }
+
         this.numDiscoveredInds = 0;
+    }
+
+    /**
+     * Tells whether this instance is configured in such a way that it should traverse the IND search space both using
+     * pessimistic and optimistic traversal strategies.
+     *
+     * @return whether said condition holds
+     */
+    private boolean isConfiguredForMixedTraversal() {
+        return this.maxBfsArity > 1 && (this.maxArity == -1 || this.maxArity > this.maxBfsArity);
     }
 
     protected void executeRun() throws Exception {
@@ -140,7 +185,7 @@ public class Sindy extends AbstractSindy implements Runnable {
         // Now perform n-ary IND detection using the Apriori candidate generation.
         this.allInds = this.newInds;
         int newArity = 2;
-        while (this.newInds != null && !this.newInds.isEmpty() && (newArity < this.maxArity || this.maxArity == -1)) {
+        while (this.newInds != null && !this.newInds.isEmpty() && (newArity <= this.maxBfsArity || this.maxBfsArity == -1)) {
             this.logger.info("{} INDs for n-ary IND generation.", this.newInds.size());
             if (this.logger.isDebugEnabled()) {
                 List<IND> temp = new ArrayList<>(this.newInds);
@@ -207,6 +252,31 @@ public class Sindy extends AbstractSindy implements Runnable {
 
             // Prepare for the next iteration.
             newArity++;
+        }
+
+
+        // Check if we dropped out of above loop because of the maxBfsArity parameter.
+        if (this.maxBfsArity == -1 || this.maxBfsArity >= newArity) return;
+
+        // If so, check if we should proceed further anyway.
+        if (this.maxArity != -1 && newArity > this.maxArity) return;
+
+        // Initialize the data structures for optimistic traversal.
+        Map<IndSubspaceKey, ZigZagSubspace> indSubspaces = new HashMap<>();
+        for (IND ind : this.allInds) {
+            // Determine the IND subspace for the IND.
+            ZigZagSubspace indSubspace = indSubspaces.computeIfAbsent(
+                    IndSubspaceKey.createFromInd(ind, this.columnBitMask),
+                    ZigZagSubspace::new
+            );
+            // Make use of the knowledge that the INDs are already consolidated.
+            indSubspace.positiveBorder.add(ind);
+            NaryInd naryInd = new NaryInd(ind);
+            for (UnaryInd unaryInd : naryInd.getUnaryInds()) {
+                indSubspace.unaryInds.add(unaryInd.toNaryInd().toInclusionDependency());
+            }
+            // TODO: Maintain the stripped negative border.
+            throw new RuntimeException("TODO: Maintain the stripped negative border.");
         }
     }
 
@@ -331,4 +401,21 @@ public class Sindy extends AbstractSindy implements Runnable {
     public Collection<IND> getConsolidatedINDs() {
         return this.allInds;
     }
+
+    public int getMaxBfsArity() {
+        return this.maxBfsArity;
+    }
+
+    public void setMaxBfsArity(int maxBfsArity) {
+        this.maxBfsArity = maxBfsArity;
+    }
+
+    public OptimisticCandidateGenerator<ZigZagSubspace> getOptimisticCandidateGenerator() {
+        return this.optimisticCandidateGenerator;
+    }
+
+    public void setOptimisticCandidateGenerator(OptimisticCandidateGenerator<ZigZagSubspace> optimisticCandidateGenerator) {
+        this.optimisticCandidateGenerator = optimisticCandidateGenerator;
+    }
+
 }
