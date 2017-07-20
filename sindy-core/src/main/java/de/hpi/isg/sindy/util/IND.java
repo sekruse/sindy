@@ -10,6 +10,11 @@ import java.util.Arrays;
 public class IND {
 
     /**
+     * An instance without any columns.
+     */
+    public static final IND emptyInstance = new IND(new int[0], new int[0]);
+
+    /**
      * IDs of the dependent and reference columns of this instance.
      */
     protected final int[] dependentColumns, referencedColumns;

@@ -2,6 +2,7 @@ package de.hpi.isg.sindy.udf;
 
 import au.com.bytecode.opencsv.CSVParser;
 import de.hpi.isg.sindy.data.IntObjectTuple;
+import de.hpi.isg.sindy.util.NullValueCounter;
 import de.hpi.isg.sindy.util.TableWidthAccumulator;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
@@ -41,6 +42,7 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
     private final boolean isDropDifferingLines;
 
     private TableWidthAccumulator tableWidthAccumulator;
+    private NullValueCounter nullValueCounter;
 
     /**
      * Creates a new instance without limitation of used fields.
@@ -79,6 +81,8 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         this.csvParser = new CSVParser(this.separator, this.quoteChar, this.escapeChar, this.strictQuotes, this.ignoreLeadingWhiteSpace);
         this.tableWidthAccumulator = new TableWidthAccumulator();
         this.getRuntimeContext().addAccumulator(TableWidthAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
+        this.nullValueCounter = new NullValueCounter();
+        this.getRuntimeContext().addAccumulator(NullValueCounter.DEFAULT_KEY, this.nullValueCounter);
     }
 
     @Override
@@ -93,7 +97,8 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         // Parse and check the correctness.
         try {
             fields = this.csvParser.parseLine(row);
-        } catch (IOException e) {
+            this.tableWidthAccumulator.setNumColumns(fileId, fields.length);
+        } catch (Exception e) {
             if (this.isDropDifferingLines) return;
             throw new RuntimeException(String.format("Could not parse tuple %s.", fileLine), e);
         }
@@ -106,15 +111,15 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
                 ));
             }
         }
-        this.tableWidthAccumulator.add(new IntObjectTuple<>(fileId, fields.length));
 
         // Forward the parsed values.
         int numFieldsToRead = (this.maxFields >= 0) ? this.maxFields : fields.length;
-        for (int i = 0; i < numFieldsToRead; i++) {
-            String field = fields[i];
+        for (int fieldIndex = 0; fieldIndex < numFieldsToRead; fieldIndex++) {
+            String field = fields[fieldIndex];
             if (Objects.equals(field, this.nullString)) {
                 if (this.isSupressingEmptyCells) {
                     this.outputTuple.a++;
+                    this.nullValueCounter.add(fileId + fieldIndex);
                     continue;
                 } else {
                     field = "\1";

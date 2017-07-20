@@ -32,11 +32,22 @@ public class TableWidthAccumulator implements Accumulator<IntObjectTuple<Integer
      */
     private TableWidthAccumulator(Int2IntOpenHashMap numColumnsByTableId) {
         this.numColumnsByTableId = numColumnsByTableId;
+        this.numColumnsByTableId.defaultReturnValue(-1);
     }
 
     @Override
     public void add(IntObjectTuple<Integer> tableIdAndNumColumns) {
         this.numColumnsByTableId.put(tableIdAndNumColumns.a, tableIdAndNumColumns.b.intValue());
+    }
+
+    public void setNumColumns(int tableId, int numColumns) {
+        int oldValue = this.numColumnsByTableId.put(tableId, numColumns);
+        if (oldValue != -1 && numColumns != oldValue) {
+            throw new RuntimeException(String.format(
+                    "Reported %d columns for table with ID %d. Expected %d columns, though.",
+                    numColumns, tableId, oldValue
+            ));
+        }
     }
 
     @Override

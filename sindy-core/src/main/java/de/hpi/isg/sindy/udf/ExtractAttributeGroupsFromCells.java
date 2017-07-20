@@ -12,8 +12,11 @@
  **********************************************************************************************************************/
 package de.hpi.isg.sindy.udf;
 
+import de.hpi.isg.sindy.util.DistinctValueCounter;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.configuration.Configuration;
 
 /**
  * This operator transforms an attribute group into a set of attribute occurrences, i.e., each attribute is attached the count 1.
@@ -21,10 +24,23 @@ import org.apache.flink.api.java.tuple.Tuple2;
  * @author Sebastian Kruse
  */
 @SuppressWarnings("serial")
-public class ExtractAttributeGroupsFromCells implements MapFunction<Tuple2<String, int[]>, int[]> {
+public class ExtractAttributeGroupsFromCells extends RichMapFunction<Tuple2<String, int[]>, int[]> {
+
+    private DistinctValueCounter distinctValueCounter;
+
+    @Override
+    public void open(Configuration parameters) throws Exception {
+        super.open(parameters);
+
+        this.distinctValueCounter = new DistinctValueCounter();
+        this.getRuntimeContext().addAccumulator(DistinctValueCounter.DEFAULT_KEY, this.distinctValueCounter);
+    }
 
     @Override
     public int[] map(Tuple2<String, int[]> cell) throws Exception {
+        for (int columnId : cell.f1) {
+            this.distinctValueCounter.add(columnId);
+        }
         return cell.f1;
     }
 
