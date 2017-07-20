@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.Collection;
 import java.util.LinkedList;
+import java.util.function.Predicate;
 
 /**
  * Generates {@link IND} candidates based on given {@link IND}s by some strategy.
@@ -19,16 +20,17 @@ public interface CandidateGenerator {
      * @param inds                is a collection of valid INDs of a single IND subspace
      * @param indSubspaceKey      describes this IND subspace
      * @param naryIndRestrictions that should be applied to the candidate generation
-     * @param emptyColumnIds      IDs of columns without any content
+     * @param inputPredicate      if given, existing {@link IND}s must evaluate to {@code true} to be considered for the
+     *                            candidate generation
      * @return all generated IND candidates
      */
     default Collection<IND> generate(Collection<IND> inds,
                                      IndSubspaceKey indSubspaceKey,
                                      NaryIndRestrictions naryIndRestrictions,
-                                     IntSet emptyColumnIds,
+                                     Predicate<IND> inputPredicate,
                                      int maxArity) {
         Collection<IND> collector = new LinkedList<>();
-        this.generate(inds, indSubspaceKey, naryIndRestrictions, emptyColumnIds, maxArity, collector);
+        this.generate(inds, indSubspaceKey, naryIndRestrictions, null, maxArity, collector);
         return collector;
     }
 
@@ -38,13 +40,14 @@ public interface CandidateGenerator {
      * @param inds                is a collection of valid INDs of a single IND subspace
      * @param indSubspaceKey      describes this IND subspace
      * @param naryIndRestrictions that should be applied to the candidate generation
-     * @param emptyColumnIds      IDs of columns without any content
+     * @param inputPredicate      if given, existing {@link IND}s must evaluate to {@code true} to be considered for the
+     *                            candidate generation
      * @param collector           collects all generated IND candidates
      */
     void generate(Collection<IND> inds,
                   IndSubspaceKey indSubspaceKey,
                   NaryIndRestrictions naryIndRestrictions,
-                  IntSet emptyColumnIds,
+                  Predicate<IND> inputPredicate,
                   int maxArity,
                   Collection<IND> collector);
 

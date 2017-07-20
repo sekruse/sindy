@@ -149,7 +149,6 @@ public class SindyTest {
                 inds::add
         );
         sindy.setFieldSeparator(',');
-        sindy.setCandidateGenerator(new AprioriCandidateGenerator(false));
         sindy.run();
 
         Set<IND> expectedINDs = new HashSet<>();
@@ -198,7 +197,6 @@ public class SindyTest {
         );
         sindy.setFieldSeparator(',');
         sindy.setMaxArity(-1);
-        sindy.setCandidateGenerator(new AprioriCandidateGenerator(false));
         sindy.setMaxBfsArity(2); // Only the first two levels/arities should be checked with a pessimistic approach.
         sindy.setOptimisticCandidateGenerator(new TransversalCandidateGenerator());
         sindy.run();

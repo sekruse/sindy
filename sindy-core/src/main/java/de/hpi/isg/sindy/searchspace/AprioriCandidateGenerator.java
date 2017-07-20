@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.*;
+import java.util.function.Predicate;
 
 /**
  * Generates {@link IND} candidates in an Apriori manner (as described for the MIND algorithm).
@@ -14,18 +15,11 @@ import java.util.*;
  */
 public class AprioriCandidateGenerator implements CandidateGenerator {
 
-    private final boolean isDropEmptyDependentColumns;
-
-    public AprioriCandidateGenerator(boolean isDropEmptyDependentColumns) {
-        this.isDropEmptyDependentColumns = isDropEmptyDependentColumns;
-    }
-
-
     @Override
     public void generate(Collection<IND> inds,
                          IndSubspaceKey indSubspaceKey,
                          NaryIndRestrictions naryIndRestrictions,
-                         IntSet emptyColumnIds,
+                         Predicate<IND> inputPredicate,
                          int maxArity,
                          Collection<IND> candidates) {
 
@@ -33,12 +27,8 @@ public class AprioriCandidateGenerator implements CandidateGenerator {
         Map<IntList, List<IND>> prefixMap = new HashMap<>();
         PrefixGrouping:
         for (IND ind : inds) {
-            // Ensure that the dependent columns are non-empty.
-            if (this.isDropEmptyDependentColumns) {
-                for (int depColumn : ind.getDependentColumns()) {
-                    if (emptyColumnIds.contains(depColumn)) continue PrefixGrouping;
-                }
-            }
+            // Test whether the IND may be used for candidate generation.
+            if (inputPredicate != null && !inputPredicate.test(ind)) continue;
 
             if (ind.getArity() < maxArity || maxArity == -1) {
                 IntList prefix = this.extractAprioriPrefix(ind);

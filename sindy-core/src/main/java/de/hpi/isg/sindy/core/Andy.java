@@ -167,8 +167,7 @@ public class Andy extends AbstractSindy implements Runnable {
         }
 
 
-
-//        // Now perform n-ary IND detection using the Apriori candidate generation.
+        // Now perform n-ary IND detection using the Apriori candidate generation.
 //        this.allInds = this.newInds;
 //        int newArity = 2;
 //        while (this.newInds != null && !this.newInds.isEmpty() && (newArity <= this.maxArity)) {
@@ -238,6 +237,7 @@ public class Andy extends AbstractSindy implements Runnable {
 //
 //            // Prepare for the next iteration.
 //            newArity++;
+//        }
     }
 
     /**
@@ -254,8 +254,7 @@ public class Andy extends AbstractSindy implements Runnable {
             this.candidateGenerator.generate(
                     entry.getValue(), entry.getKey(),
                     this.naryIndRestrictions,
-//                    this.emptyColumnIds, TODO
-                    IntSets.EMPTY_SET, // TODO
+                  null, // TODO
                     this.maxArity,
                     indCandidates
             );

@@ -57,6 +57,12 @@ public class Sindy extends AbstractSindy implements Runnable {
     private int maxBfsArity = -1;
 
     /**
+     * Whether to exclude void {@link IND}s where the dependent side does not contain any values from candidate generation.
+     * <p>By default {@code false} because it impairs the result completeness when the user is not aware of this restriction.</p>
+     */
+    private boolean isExcludeVoidIndsFromCandidateGeneration;
+
+    /**
      * Candidate generator to use when proceeding optimistically through the search space by leaping "over" several
      * IND candidates.
      */
@@ -294,7 +300,9 @@ public class Sindy extends AbstractSindy implements Runnable {
             this.candidateGenerator.generate(
                     entry.getValue(), entry.getKey(),
                     this.naryIndRestrictions,
-                    this.emptyColumnIds,
+                    this.isExcludeVoidIndsFromCandidateGeneration ?
+                            ind -> ind.getArity() == 1 && !this.emptyColumnIds.contains(ind.getDependentColumns()[0]) :
+                            null,
                     this.maxArity,
                     indCandidates
             );
@@ -400,6 +408,14 @@ public class Sindy extends AbstractSindy implements Runnable {
      */
     public Collection<IND> getConsolidatedINDs() {
         return this.allInds;
+    }
+
+    public boolean isExcludeVoidIndsFromCandidateGeneration() {
+        return this.isExcludeVoidIndsFromCandidateGeneration;
+    }
+
+    public void setExcludeVoidIndsFromCandidateGeneration(boolean excludeVoidIndsFromCandidateGeneration) {
+        this.isExcludeVoidIndsFromCandidateGeneration = excludeVoidIndsFromCandidateGeneration;
     }
 
     public int getMaxBfsArity() {

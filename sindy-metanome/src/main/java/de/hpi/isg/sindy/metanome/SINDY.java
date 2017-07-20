@@ -161,10 +161,10 @@ public class SINDY implements InclusionDependencyAlgorithm,
         switch (this.candidateGenerator) {
             case "mind":
             case "apriori":
-                sindy.setCandidateGenerator(new AprioriCandidateGenerator(false));
+                sindy.setExcludeVoidIndsFromCandidateGeneration(false);
                 break;
             case "binder":
-                sindy.setCandidateGenerator(new AprioriCandidateGenerator(true));
+                sindy.setExcludeVoidIndsFromCandidateGeneration(true);
                 break;
             default:
                 throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
