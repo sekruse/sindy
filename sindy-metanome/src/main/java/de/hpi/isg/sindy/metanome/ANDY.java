@@ -49,7 +49,7 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * @see Sindy#maxColumns
      */
     @MetanomeProperty
-    private int maxColumns = -1;
+    private final int maxColumns = -1;
 
     /**
      * @see Sindy#sampleRows
@@ -61,7 +61,7 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * @see Sindy#isDropNulls
      */
     @MetanomeProperty
-    private boolean isDropNulls = true;
+    private final boolean isDropNulls = true;
 
     /**
      * @see Sindy#isNotUseGroupOperators
@@ -73,13 +73,13 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * @see Sindy#candidateGenerator
      */
     @MetanomeProperty
-    private String candidateGenerator = "binder";
+    private final String candidateGenerator = "binder";
 
     /**
      * @see Sindy#maxArity
      */
     @MetanomeProperty
-    private int maxArity = -1;
+    private final int maxArity = -1;
 
     /**
      * @see de.hpi.isg.sindy.core.AbstractSindy#naryIndRestrictions
@@ -91,25 +91,25 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * The number of bits used to encode columns.
      */
     @MetanomeProperty
-    private int numColumnBits = 16;
+    private final int numColumnBits = 16;
 
     /**
      * The parallelism to use for Flink jobs. {@code -1} indicates default parallelism.
      */
     @MetanomeProperty
-    private int parallelism = -1;
+    private final int parallelism = -1;
 
     /**
      * An optional {@code host:port} specification of a remote Flink master.
      */
     @MetanomeProperty
-    private String flinkMaster = null;
+    private final String flinkMaster;
 
     /**
      * An optional Flink configuration file.
      */
     @MetanomeProperty
-    private String flinkConfig = null;
+    private final String flinkConfig;
 
 
     /**
@@ -162,10 +162,10 @@ public class ANDY implements InclusionDependencyAlgorithm,
         switch (this.candidateGenerator) {
             case "mind":
             case "apriori":
-                andy.setCandidateGenerator(new AprioriCandidateGenerator(false));
+                andy.setExcludeVoidIndsFromCandidateGeneration(false);
                 break;
             case "binder":
-                andy.setCandidateGenerator(new AprioriCandidateGenerator(true));
+                andy.setExcludeVoidIndsFromCandidateGeneration(true);
                 break;
             default:
                 throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
@@ -309,7 +309,7 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * @param columnBitMask      marks the column bits in the column IDs
      * @return the {@link InclusionDependency}
      */
-    private InclusionDependency translate(IND ind, Int2ObjectMap<Table> indexedInputTables, int columnBitMask) {
+    private InclusionDependency translate(IND ind, Int2ObjectMap<ANDY.Table> indexedInputTables, int columnBitMask) {
         InclusionDependency inclusionDependency;
         if (ind.getArity() == 0) {
             inclusionDependency = new InclusionDependency(

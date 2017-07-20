@@ -1,10 +1,12 @@
 package de.hpi.isg.sindy.udf;
 
 import de.hpi.isg.sindy.data.IntObjectTuple;
+import de.hpi.isg.sindy.util.NullValueCounter;
 import it.unimi.dsi.fastutil.ints.*;
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,11 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<IntObjectTupl
      * Whether column combinations that contain {@code null} values should be considered.
      */
     private final boolean isOutputCombinationsWithNulls;
+
+    /**
+     * Keep track of dropped value combinations.
+     */
+    private NullValueCounter nullValueCounter;
 
     /**
      * Create a new instance.
@@ -84,6 +91,14 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<IntObjectTupl
     }
 
     @Override
+    public void open(Configuration parameters) throws Exception {
+        super.open(parameters);
+
+        this.nullValueCounter = new NullValueCounter();
+        this.getRuntimeContext().addAccumulator(NullValueCounter.DEFAULT_KEY, this.nullValueCounter);
+    }
+
+    @Override
     public void flatMap(final IntObjectTuple<String[]> tuple, final Collector<IntObjectTuple<String>> out)
             throws Exception {
 
@@ -109,6 +124,7 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<IntObjectTupl
                     if (this.isOutputCombinationsWithNulls) {
                         field = "\1"; // marker for null values
                     } else {
+                        this.nullValueCounter.add(combinationId);
                         continue ColumnCombinations;
                     }
                 }

@@ -107,7 +107,7 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
         this.sindy.setMaxArity(this.parameters.maxN);
         this.sindy.setOnlyCountInds(this.parameters.isCountOnly);
         this.sindy.setNaryIndRestrictions(this.parameters.getNaryIndRestrictions());
-        this.sindy.setCandidateGenerator(this.parameters.getCandidateGenerator());
+        this.parameters.configureCandidateGenerator(this.sindy);
         this.sindy.setNotUseGroupOperators(this.getBasicSindyParameters().isNotUseGroupOperators);
         this.sindy.setMaxColumns(this.getBasicSindyParameters().maxColumns);
         this.sindy.setSampleRows(this.getBasicSindyParameters().sampleRows);
@@ -200,13 +200,15 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
         @Parameter(names = "--nary-gen", description = "n-ary IND candidate generation strategy", required = false)
         public String candidateGenerator = "apriori";
 
-        public CandidateGenerator getCandidateGenerator() {
+        public void configureCandidateGenerator(Sindy sindy) {
             switch (this.candidateGenerator) {
                 case "apriori":
                 case "mind":
-                    return new AprioriCandidateGenerator(false);
+                    sindy.setExcludeVoidIndsFromCandidateGeneration(false);
+                    break;
                 case "binder":
-                    return new AprioriCandidateGenerator(true);
+                    sindy.setExcludeVoidIndsFromCandidateGeneration(true);
+                    break;
                 default:
                     throw new IllegalArgumentException(String.format(
                             "Unknown candidate generator strategy: \"%s\".", this.candidateGenerator

@@ -91,6 +91,11 @@ public abstract class AbstractSindy {
      * {@link CandidateGenerator} for n-ary IND discovery.
      */
     protected CandidateGenerator candidateGenerator = new AprioriCandidateGenerator();
+    /**
+     * Whether to exclude void {@link IND}s where the dependent side does not contain any values from candidate generation.
+     * <p>By default {@code false} because it impairs the result completeness when the user is not aware of this restriction.</p>
+     */
+    protected boolean isExcludeVoidIndsFromCandidateGeneration;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Parsing configuration.                                                                                         //
@@ -264,7 +269,7 @@ public abstract class AbstractSindy {
                 new MultiFileTextInputFormat.ListBasedFileIdRetriever(paths2minColumnId);
         MultiFileTextInputFormat inputFormat;
         inputFormat = new MultiFileTextInputFormat(fileIdRetriever, fileIdRetriever, null);
-        inputFormat.setEncoding(encoding);
+        inputFormat.setEncoding(this.encoding);
         inputFormat.setFilePath(inputPath);
         // TODO: Enable if needed.
 //                inputFormat.setRecordDetector(new CsvRecordStateMachine(csvParameters.getFieldSeparatorChar(),
@@ -594,15 +599,15 @@ public abstract class AbstractSindy {
      * @throws Exception
      */
     protected void executePlan(final String planName) throws Exception {
-        logger.info("Execute plan \"{}\".", planName);
+        this.logger.info("Execute plan \"{}\".", planName);
 
         final long startTime = System.currentTimeMillis();
         final JobExecutionResult result = this.executionEnvironment.execute(planName);
         final long endTime = System.currentTimeMillis();
         final JobMeasurement jobMeasurement = new JobMeasurement(planName, startTime, endTime, result);
 
-        logger.info("Finished plan {}.", planName);
-        logger.info("Plan runtime: {} ms (net {} ms)", jobMeasurement.getDuration(), result.getNetRuntime());
+        this.logger.info("Finished plan {}.", planName);
+        this.logger.info("Plan runtime: {} ms (net {} ms)", jobMeasurement.getDuration(), result.getNetRuntime());
 
         this.jobMeasurements.add(jobMeasurement);
     }
@@ -764,6 +769,14 @@ public abstract class AbstractSindy {
             tableId += tableIdDelta;
         }
         return index;
+    }
+
+    public boolean isExcludeVoidIndsFromCandidateGeneration() {
+        return this.isExcludeVoidIndsFromCandidateGeneration;
+    }
+
+    public void setExcludeVoidIndsFromCandidateGeneration(boolean excludeVoidIndsFromCandidateGeneration) {
+        this.isExcludeVoidIndsFromCandidateGeneration = excludeVoidIndsFromCandidateGeneration;
     }
 
     @SuppressWarnings("serial")

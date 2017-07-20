@@ -3,7 +3,6 @@ package de.hpi.isg.sindy.core;
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
 import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
-import de.hpi.isg.sindy.searchspace.hypergraph.NaryInd;
 import de.hpi.isg.sindy.util.*;
 import it.unimi.dsi.fastutil.ints.*;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -32,7 +31,7 @@ public class Andy extends AbstractSindy implements Runnable {
     /**
      * Accepts INDs as soon as they are available.
      */
-    private Consumer<IND> indCollector;
+    private final Consumer<IND> indCollector;
 
     /**
      * Collects INDs so as to generate candidates of higher arity.
@@ -102,7 +101,7 @@ public class Andy extends AbstractSindy implements Runnable {
 
         this.newInds = new ArrayList<>();
         this.augmentationRules = new ArrayList<>();
-        AddCommandFactory<Tuple2<Integer, int[]>> addUnaryIndCommandFactory = indSet ->
+        AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addUnaryIndCommandFactory = indSet ->
                 (Runnable) (() -> {
                     for (int referencedId : indSet.f1) {
                         int dependentId = indSet.f0;
@@ -115,23 +114,27 @@ public class Andy extends AbstractSindy implements Runnable {
         // Retrieve the number of null values per column.
         JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
         Int2IntOpenHashMap simpleNullValueCounts = result.getAccumulatorResult(NullValueCounter.DEFAULT_KEY);
-        Object2IntMap<IntArrayList> nullValueCounts = new Object2IntOpenHashMap<>(simpleNullValueCounts.size());
-        for (ObjectIterator<Int2IntMap.Entry> iter = simpleNullValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext();) {
-            Int2IntMap.Entry entry = iter.next();
-            nullValueCounts.put(new IntArrayList(new int[]{entry.getIntKey()}), entry.getIntValue());
+        List<Object2IntMap<IntList>> nullValueCountsByArity = new ArrayList<>();
+        {
+            Object2IntMap<IntList> nullValueCounts = new Object2IntOpenHashMap<>(simpleNullValueCounts.size());
+            for (ObjectIterator<Int2IntMap.Entry> iter = simpleNullValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext(); ) {
+                Int2IntMap.Entry entry = iter.next();
+                nullValueCounts.put(new IntArrayList(new int[]{entry.getIntKey()}), entry.getIntValue());
+            }
+            nullValueCountsByArity.add(0, nullValueCounts);
         }
-        List<Object2IntMap<IntArrayList>> nullValueCountsByArity = new ArrayList<>();
-        nullValueCountsByArity.add(0, nullValueCounts);
 
         // Store the distinct value counts of non-empty columns.
         Int2IntOpenHashMap simpleDistinctValueCounts = result.getAccumulatorResult(DistinctValueCounter.DEFAULT_KEY);
-        Object2IntMap<IntArrayList> distinctValueCounts = new Object2IntOpenHashMap<>(simpleDistinctValueCounts.size());
-        for (ObjectIterator<Int2IntMap.Entry> iter = simpleDistinctValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext();) {
-            Int2IntMap.Entry entry = iter.next();
-            distinctValueCounts.put(new IntArrayList(new int[]{entry.getIntKey()}), entry.getIntValue());
+        List<Object2IntMap<IntList>> distinctValueCountsByArity = new ArrayList<>();
+        {
+            Object2IntMap<IntList> distinctValueCounts = new Object2IntOpenHashMap<>(simpleDistinctValueCounts.size());
+            for (ObjectIterator<Int2IntMap.Entry> iter = simpleDistinctValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext(); ) {
+                Int2IntMap.Entry entry = iter.next();
+                distinctValueCounts.put(new IntArrayList(new int[]{entry.getIntKey()}), entry.getIntValue());
+            }
+            distinctValueCountsByArity.add(0, distinctValueCounts);
         }
-        List<Object2IntMap<IntArrayList>> distinctValueCountsByArity = new ArrayList<>();
-        distinctValueCountsByArity.add(0, distinctValueCounts);
 
         // Detect empty columns and add appropriate INDs.
         Int2IntOpenHashMap numColumnsByTableId = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
@@ -153,91 +156,156 @@ public class Andy extends AbstractSindy implements Runnable {
         }
 
         // Go over the INDs to find 0-ary ARs. Promote all other INDs.
-        for (IND ind : this.newInds) {
+        for (Iterator<IND> iter = this.newInds.iterator(); iter.hasNext(); ) {
+            IND ind = iter.next();
+
             // Determine distinct value count of dependent and referenced column.
             int depColumnId = ind.getDependentColumns()[0];
             int refColumnId = ind.getReferencedColumns()[0];
-            if (simpleDistinctValueCounts.get(depColumnId) > 0 && simpleDistinctValueCounts.get(refColumnId) == 1) {
+            if (simpleDistinctValueCounts.get(depColumnId) == 0 && simpleDistinctValueCounts.get(refColumnId) == 1) {
                 IndAugmentationRule iar = new IndAugmentationRule(IND.emptyInstance, ind);
                 this.augmentationRules.add(iar);
                 System.out.printf("Discovered %s.\n", iar);
-            } else {
-                this.allInds.add(ind);
+                iter.remove();
             }
         }
 
 
         // Now perform n-ary IND detection using the Apriori candidate generation.
-//        this.allInds = this.newInds;
-//        int newArity = 2;
-//        while (this.newInds != null && !this.newInds.isEmpty() && (newArity <= this.maxArity)) {
-//            this.logger.info("{} INDs for n-ary IND generation.", this.newInds.size());
-//            if (this.logger.isDebugEnabled()) {
-//                List<IND> temp = new ArrayList<>(this.newInds);
-//                temp.sort(INDs.COMPARATOR);
-//                if (this.logger.isDebugEnabled()) {
-//                    for (IND candidate : temp) {
-//                        this.logger.debug("-> IND {}", candidate);
-//                    }
-//                }
-//            }
-//
-//            // Generate n-ary IND candidates.
-//            final Set<IND> indCandidates = this.generateCandidates(this.newInds);
-//            if (indCandidates.isEmpty()) {
-//                break;
-//            }
-//
-//            // For any column combination in the n-ary IND candidates, create an ID.
-//            final Object2IntMap<IntList> columnCombinationIds = this.createIdsForColumnCombinations2(indCandidates);
-//            final Int2ObjectMap<IntList> columnCombinationsById = this.invert(columnCombinationIds);
-//
-//            // Build and execute the appropriate Flink job.
-//            this.newInds = new ArrayList<>();
-//            this.seenDependentIds.clear();
-//            DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds).project(0, 2);
-//            AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
-//                    indSet ->
-//                            (Runnable) () -> {
-//                                int dependentId = indSet.f0;
-//                                for (int referencedId : indSet.f1) {
-//                                    Andy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
-//                                }
-//                                this.seenDependentIds.add(dependentId);
-//                            };
-//            String jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
-//            this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
-//
-//            // Detect empty columns and add appropriate INDs.
-//            // Index the INDs by their dependent columns.
-//            Int2ObjectMap<Collection<IND>> indCandidatesByDepId = new Int2ObjectOpenHashMap<>();
-//            for (IND indCandidate : indCandidates) {
-//                IntList depColumns = IntArrayList.wrap(indCandidate.getDependentColumns());
-//                int depId = columnCombinationIds.getInt(depColumns);
-//                Collection<IND> indCandidatesForDep = indCandidatesByDepId.get(depId);
-//                if (indCandidatesForDep == null) {
-//                    indCandidatesForDep = new ArrayList<>();
-//                    indCandidatesByDepId.put(depId, indCandidatesForDep);
-//                }
-//                indCandidatesForDep.add(indCandidate);
-//            }
-//            // Create INDs for all unseen dependent column INDs.
-//            for (Int2ObjectMap.Entry<Collection<IND>> entry : indCandidatesByDepId.int2ObjectEntrySet()) {
-//                int depId = entry.getIntKey();
-//                if (!this.seenDependentIds.contains(depId)) {
-//                    for (IND indCandidate : entry.getValue()) {
-//                        this.collectInd(indCandidate);
-//                    }
-//                }
-//            }
-//
-//            // Consolidate the newly discovered INDs with the existing INDs.
-//            this.candidateGenerator.consolidate(this.allInds, this.newInds);
-//            this.allInds.addAll(this.newInds);
-//
-//            // Prepare for the next iteration.
-//            newArity++;
-//        }
+        this.allInds = this.newInds;
+        int newArity = 2;
+        while (this.newInds != null && !this.newInds.isEmpty() && (newArity <= this.maxArity || this.maxArity == -1)) {
+            this.logger.info("{} INDs for n-ary IND generation.", this.newInds.size());
+            if (this.logger.isDebugEnabled()) {
+                List<IND> temp = new ArrayList<>(this.newInds);
+                temp.sort(INDs.COMPARATOR);
+                if (this.logger.isDebugEnabled()) {
+                    for (IND candidate : temp) {
+                        this.logger.debug("-> IND {}", candidate);
+                    }
+                }
+            }
+
+            // Generate n-ary IND candidates.
+            final Set<IND> indCandidates = this.generateCandidates(this.newInds);
+            if (indCandidates.isEmpty()) {
+                break;
+            }
+
+            // For any column combination in the n-ary IND candidates, create an ID.
+            final Object2IntMap<IntList> columnCombinationIds = this.createIdsForColumnCombinations2(indCandidates);
+            final Int2ObjectMap<IntList> columnCombinationsById = this.invert(columnCombinationIds);
+
+            // Build and execute the appropriate Flink job.
+            this.newInds = new ArrayList<>();
+            DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds).project(0, 2);
+            AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
+                    indSet ->
+                            (Runnable) () -> {
+                                int dependentId = indSet.f0;
+                                for (int referencedId : indSet.f1) {
+                                    Andy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
+                                }
+                            };
+            jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
+            this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+
+            // Collect the number of distinct values and null values per column combination.
+            result = this.getJobMeasurements().get(newArity - 1).getFlinkResults();
+            Int2IntOpenHashMap encodedNullValueCounts = result.getAccumulatorResult(NullValueCounter.DEFAULT_KEY);
+            Object2IntMap<IntList> nullValueCounts = new Object2IntOpenHashMap<>(simpleNullValueCounts.size());
+            for (ObjectIterator<Int2IntMap.Entry> iter = encodedNullValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext(); ) {
+                Int2IntMap.Entry entry = iter.next();
+                int columnCombinationId = entry.getIntKey();
+                IntList columnCombination = sorted(columnCombinationsById.get(columnCombinationId));
+                nullValueCounts.put(columnCombination, entry.getIntValue());
+            }
+            nullValueCountsByArity.add(newArity - 1, nullValueCounts);
+
+            Int2IntOpenHashMap encodedDistinctValueCounts = result.getAccumulatorResult(DistinctValueCounter.DEFAULT_KEY);
+            Object2IntMap<IntList> distinctValueCounts = new Object2IntOpenHashMap<>(simpleDistinctValueCounts.size());
+            for (ObjectIterator<Int2IntMap.Entry> iter = encodedDistinctValueCounts.int2IntEntrySet().fastIterator(); iter.hasNext(); ) {
+                Int2IntMap.Entry entry = iter.next();
+                int columnCombinationId = entry.getIntKey();
+                IntList columnCombination = columnCombinationsById.get(columnCombinationId);
+                distinctValueCounts.put(columnCombination, entry.getIntValue());
+            }
+            distinctValueCountsByArity.add(newArity - 1, distinctValueCounts);
+
+
+            // Go over the INDs, determine column combination metadata, and determine IND ARs.
+            Object2IntMap<IntList> prevDistinctValueCounts = distinctValueCountsByArity.get(newArity - 2);
+            Object2IntMap<IntList> curDistinctValueCounts = distinctValueCountsByArity.get(newArity - 1);
+            Object2IntMap<IntList> prevNullValueCounts = nullValueCountsByArity.get(newArity - 2);
+            Object2IntMap<IntList> curNullValueCounts = nullValueCountsByArity.get(newArity - 1);
+            for (Iterator<IND> iter = this.newInds.iterator(); iter.hasNext(); ) {
+                IND newInd = iter.next();
+
+                // First check, whether the new IND is void.
+                IntList sortedDepColumnIds = toSortedIntList(newInd.getDependentColumns());
+                int numDepDistinctValues = curDistinctValueCounts.getInt(sortedDepColumnIds);
+                if (numDepDistinctValues == 0) continue;
+
+                // Otherwise, check for possible IND ARs.
+                boolean isIarEmbedded = false;
+                IntList sortedRefColumnIds = toSortedIntList(newInd.getReferencedColumns());
+                int numRefDistinctValues = curDistinctValueCounts.getInt(sortedRefColumnIds);
+                int numRefNullValues = curNullValueCounts.getInt(sortedRefColumnIds);
+                for (int i = 0; i < newInd.getArity(); i++) {
+                    IND generalization = newInd.coproject(i);
+                    IntList sortedGenRefColumnIds = toSortedIntList(generalization.getReferencedColumns());
+                    int numGenRefDistinctValues = prevDistinctValueCounts.getInt(sortedGenRefColumnIds);
+                    int numGenRefNullValues = prevNullValueCounts.getInt(sortedGenRefColumnIds);
+                    if (numRefDistinctValues == numGenRefDistinctValues && numRefNullValues == numGenRefNullValues) {
+                        IndAugmentationRule iar = new IndAugmentationRule(generalization, newInd.project(i));
+                        this.augmentationRules.add(iar);
+                        System.out.printf("Discovered %s.\n", iar);
+                        isIarEmbedded = true;
+                    }
+                }
+
+                if (isIarEmbedded) iter.remove();
+            }
+
+            // Consolidate the newly discovered INDs with the existing INDs.
+            this.candidateGenerator.consolidate(this.allInds, this.newInds);
+            this.allInds.addAll(this.newInds);
+
+            // Prepare for the next iteration.
+            newArity++;
+        }
+    }
+
+    /**
+     * Returns a sorted version of the given {@link IntList}.
+     * @param intList that should be sorted
+     * @return the given {@link IntList} if it was sorted already; otherwise a sorted copy of the same
+     */
+    private static final IntList sorted(IntList intList) {
+        // First, test if the list is already sorted.
+        boolean isSorted = true;
+        for (int i = 1; i < intList.size(); i++) {
+            if (intList.getInt(i - 1) > intList.getInt(i)) {
+                isSorted = false;
+                break;
+            }
+        }
+        if (isSorted) return intList;
+
+        // Otherwise, sort.
+        int[] vals = intList.toIntArray();
+        Arrays.sort(vals);
+        return IntArrayList.wrap(vals);
+    }
+
+    /**
+     * Returns a sorted {@link IntList} of the given {@code int} array.
+     * @param intArray that should be sorted and converted
+     * @return the given {@link IntList} if it was sorted already; otherwise a sorted copy of the same
+     */
+    private static final IntList toSortedIntList(int[] intArray) {
+        Arrays.sort(intArray);
+        return IntArrayList.wrap(intArray);
     }
 
     /**
@@ -254,7 +322,7 @@ public class Andy extends AbstractSindy implements Runnable {
             this.candidateGenerator.generate(
                     entry.getValue(), entry.getKey(),
                     this.naryIndRestrictions,
-                  null, // TODO
+                    null, // TODO
                     this.maxArity,
                     indCandidates
             );

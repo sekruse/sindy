@@ -92,6 +92,41 @@ public class IND {
         return thisI == this.getArity();
     }
 
+    /**
+     * Creates a projection of this instance where the {@code index} specifies which two columns to keep.
+     *
+     * @param index the projection index
+     * @return the projected instance
+     */
+    public IND project(int index) {
+        return new IND(new int[]{this.dependentColumns[index]}, new int[]{this.referencedColumns[index]});
+    }
+
+    /**
+     * Creates a projection of this instance where the {@code index} specifies which two columns to leave out.
+     *
+     * @param index the leave-out index
+     * @return the projected instance
+     */
+    public IND coproject(int index) {
+        if (index < 0 || index >= this.getArity()) throw new IndexOutOfBoundsException();
+        return new IND(remove(this.dependentColumns, index), remove(this.referencedColumns, index));
+    }
+
+    /**
+     * Creates a new {@code int} array with one element removed.
+     *
+     * @param array the original array
+     * @param index the index to remove from {@code array}
+     * @return a new array with the index removed
+     */
+    private static int[] remove(int[] array, int index) {
+        int[] newArray = new int[array.length - 1];
+        System.arraycopy(array, 0, newArray, 0, index);
+        System.arraycopy(array, index + 1, newArray, index, array.length - (index + 1));
+        return newArray;
+    }
+
 
     @Override
     public boolean equals(Object o) {
@@ -147,4 +182,6 @@ public class IND {
         sb.append("]");
         return sb.toString();
     }
+
+
 }

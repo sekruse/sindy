@@ -34,7 +34,7 @@ public class Sindy extends AbstractSindy implements Runnable {
     /**
      * Accepts INDs as soon as they are available.
      */
-    private Consumer<IND> indCollector;
+    private final Consumer<IND> indCollector;
 
     /**
      * Keeps track of seen dependent columns or column combinations. This helps to detect "empty" column or column combinations.
@@ -55,12 +55,6 @@ public class Sindy extends AbstractSindy implements Runnable {
      * The maximum arity of IND candidates to be checked with a breadth-first search strategy.
      */
     private int maxBfsArity = -1;
-
-    /**
-     * Whether to exclude void {@link IND}s where the dependent side does not contain any values from candidate generation.
-     * <p>By default {@code false} because it impairs the result completeness when the user is not aware of this restriction.</p>
-     */
-    private boolean isExcludeVoidIndsFromCandidateGeneration;
 
     /**
      * Candidate generator to use when proceeding optimistically through the search space by leaping "over" several
@@ -408,14 +402,6 @@ public class Sindy extends AbstractSindy implements Runnable {
      */
     public Collection<IND> getConsolidatedINDs() {
         return this.allInds;
-    }
-
-    public boolean isExcludeVoidIndsFromCandidateGeneration() {
-        return this.isExcludeVoidIndsFromCandidateGeneration;
-    }
-
-    public void setExcludeVoidIndsFromCandidateGeneration(boolean excludeVoidIndsFromCandidateGeneration) {
-        this.isExcludeVoidIndsFromCandidateGeneration = excludeVoidIndsFromCandidateGeneration;
     }
 
     public int getMaxBfsArity() {
