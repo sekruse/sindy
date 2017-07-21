@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>de.hpi.isg</groupId>
-    <artifactId>sindy</artifactId>
+    <artifactId>sindy_2.10</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
@@ -20,6 +20,8 @@
         <metanome.version>1.1-SNAPSHOT</metanome.version>
         <flink.version>0.10.2</flink.version>
         <logging.scope>test</logging.scope>
+        <scala.version>2.10.4</scala.version>
+        <scala.compat.version>2.10</scala.compat.version>
     </properties>
 
     <profiles>
@@ -82,7 +84,7 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.flink</groupId>
-                <artifactId>flink-clients</artifactId>
+                <artifactId>flink-clients_${scala.version}</artifactId>
                 <version>${flink.version}</version>
                 <exclusions>
                     <exclusion>
@@ -93,7 +95,7 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.flink</groupId>
-                <artifactId>flink-java</artifactId>
+                <artifactId>flink-java_${scala.version}</artifactId>
                 <version>${flink.version}</version>
                 <exclusions>
                     <exclusion>
@@ -123,6 +125,8 @@
                 <artifactId>config</artifactId>
                 <version>1.3.1</version>
             </dependency>
+
+            <!-- Metanome -->
             <dependency>
                 <groupId>de.metanome</groupId>
                 <artifactId>algorithm_integration</artifactId>
@@ -144,6 +148,11 @@
                         <artifactId>jersey-media-json-jackson</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>de.metanome</groupId>
+                <artifactId>metanome-cli</artifactId>
+                <version>0.1-SNAPSHOT</version>
             </dependency>
 
             <dependency>

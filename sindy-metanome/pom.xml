@@ -6,10 +6,10 @@
 
     <parent>
         <groupId>de.hpi.isg</groupId>
-        <artifactId>sindy</artifactId>
+        <artifactId>sindy_2.10</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>sindy-metanome</artifactId>
+    <artifactId>sindy-metanome_2.10</artifactId>
 
     <build>
         <plugins>
@@ -38,7 +38,7 @@
     <dependencies>
         <dependency>
             <groupId>de.hpi.isg</groupId>
-            <artifactId>sindy-core</artifactId>
+            <artifactId>sindy-core_2.10</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
         <dependency>
@@ -48,6 +48,10 @@
         <dependency>
             <groupId>de.metanome</groupId>
             <artifactId>backend</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.metanome</groupId>
+            <artifactId>metanome-cli</artifactId>
         </dependency>
         <dependency>
             <groupId>it.unimi.dsi</groupId>
