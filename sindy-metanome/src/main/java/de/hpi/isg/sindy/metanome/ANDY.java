@@ -1,13 +1,9 @@
 package de.hpi.isg.sindy.metanome;
 
-import au.com.bytecode.opencsv.CSVParser;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigValue;
 import de.hpi.isg.sindy.core.Andy;
-import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.properties.MetanomePropertyLedger;
+import de.hpi.isg.sindy.metanome.util.FlinkUtils;
 import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
@@ -27,16 +23,14 @@ import de.metanome.algorithm_integration.results.InclusionDependency;
 import de.metanome.backend.input.file.DefaultFileInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntCollection;
 import org.apache.flink.api.java.ExecutionEnvironment;
-import org.apache.flink.configuration.ConfigConstants;
-import org.apache.flink.configuration.Configuration;
 
-import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Metanome interface for the {@link Sindy} algorithm.
+ * Metanome interface for the {@link Andy} algorithm.
  */
 public class ANDY implements InclusionDependencyAlgorithm,
         StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm, FileInputParameterAlgorithm {
@@ -46,40 +40,34 @@ public class ANDY implements InclusionDependencyAlgorithm,
     private InclusionDependencyResultReceiver resultReceiver;
 
     /**
-     * @see Sindy#maxColumns
+     * @see Andy#maxColumns
      */
     @MetanomeProperty
-    private final int maxColumns = -1;
+    private int maxColumns = -1;
 
     /**
-     * @see Sindy#sampleRows
+     * @see Andy#sampleRows
      */
     @MetanomeProperty
     protected int sampleRows = -1;
 
     /**
-     * @see Sindy#isDropNulls
+     * @see Andy#isDropNulls
      */
     @MetanomeProperty
-    private final boolean isDropNulls = true;
+    private boolean isDropNulls = true;
 
     /**
-     * @see Sindy#isNotUseGroupOperators
+     * @see Andy#isNotUseGroupOperators
      */
     @MetanomeProperty
     private boolean isNotUseGroupOperators;
 
     /**
-     * @see Sindy#candidateGenerator
+     * @see Andy#maxArity
      */
     @MetanomeProperty
-    private final String candidateGenerator = "binder";
-
-    /**
-     * @see Sindy#maxArity
-     */
-    @MetanomeProperty
-    private final int maxArity = -1;
+    private int maxArity = -1;
 
     /**
      * @see de.hpi.isg.sindy.core.AbstractSindy#naryIndRestrictions
@@ -91,13 +79,13 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * The number of bits used to encode columns.
      */
     @MetanomeProperty
-    private final int numColumnBits = 16;
+    private int numColumnBits = 16;
 
     /**
      * The parallelism to use for Flink jobs. {@code -1} indicates default parallelism.
      */
     @MetanomeProperty
-    private final int parallelism = -1;
+    private int parallelism = -1;
 
     /**
      * An optional {@code host:port} specification of a remote Flink master.
@@ -154,22 +142,13 @@ public class ANDY implements InclusionDependencyAlgorithm,
         }
 
         // Set up Flink.
-        ExecutionEnvironment executionEnvironment = this.createExecutionEnvironment();
+        ExecutionEnvironment executionEnvironment = FlinkUtils.createExecutionEnvironment(
+                this.flinkMaster, this.parallelism, this.flinkConfig
+        );
 
-        // Configure Sindy.
+        // Configure Andy.
         Andy andy = new Andy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
-        switch (this.candidateGenerator) {
-            case "mind":
-            case "apriori":
-                andy.setExcludeVoidIndsFromCandidateGeneration(false);
-                break;
-            case "binder":
-                andy.setExcludeVoidIndsFromCandidateGeneration(true);
-                break;
-            default:
-                throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
-        }
         andy.setMaxArity(this.maxArity);
         if (this.fileInputGenerators[0] instanceof DefaultFileInputGenerator) {
             DefaultFileInputGenerator fileInputGenerator = (DefaultFileInputGenerator) this.fileInputGenerators[0];
@@ -212,100 +191,6 @@ public class ANDY implements InclusionDependencyAlgorithm,
             System.out.println(this.format(iar, indexedInputTables, columnBitMask));
         }
         System.out.println("END");
-    }
-
-    /**
-     * Create a {@link ExecutionEnvironment} according to the configuration of this instance.
-     *
-     * @return the readily configured {@link ExecutionEnvironment}
-     */
-    private ExecutionEnvironment createExecutionEnvironment() throws AlgorithmExecutionException {
-        // Load a config if any.
-        Configuration flinkConfiguration = this.flinkConfig != null
-                ? parseTypeSafeConfig(new File(this.flinkConfig))
-                : new Configuration();
-        if (this.parallelism != -1)
-            flinkConfiguration.setInteger(ConfigConstants.DEFAULT_PARALLELISM_KEY, this.parallelism);
-
-        // Create a default or a remote execution environment.
-        ExecutionEnvironment executionEnvironment;
-        if (this.flinkMaster == null) {
-            executionEnvironment = ExecutionEnvironment.createLocalEnvironment(flinkConfiguration);
-        } else {
-            String[] hostAndPort = this.flinkMaster.split(":");
-            executionEnvironment = ExecutionEnvironment.createRemoteEnvironment(
-                    hostAndPort[0],
-                    Integer.parseInt(hostAndPort[1]),
-                    flinkConfiguration,
-                    collectContainingJars(this.getClass(), IntCollection.class, CSVParser.class)
-            );
-        }
-
-        if (this.parallelism != -1) executionEnvironment.setParallelism(this.parallelism);
-
-        return executionEnvironment;
-    }
-
-    /**
-     * Collects the JAR files that the given {@code classes} reside in.
-     *
-     * @param classes {@link Class}es
-     * @return an array of paths to the JAR files
-     * @throws AlgorithmExecutionException if any of the {@link Class}es does not reside in a JAR file
-     */
-    private static String[] collectContainingJars(Class<?>... classes) throws AlgorithmExecutionException {
-        Set<String> jars = new HashSet<>();
-        for (Class<?> cls : classes) {
-            String file = cls.getProtectionDomain().getCodeSource().getLocation().getFile();
-            if (!file.endsWith(".jar")) {
-                throw new AlgorithmExecutionException(String.format(
-                        "%s does not reside in a JAR file (but in %s).", cls, file
-                ));
-            }
-            jars.add(file);
-        }
-        return jars.toArray(new String[jars.size()]);
-    }
-
-    /**
-     * Parse a Typesafe {@link Config} file.
-     *
-     * @param configFile the {@link File} to parse
-     * @return a Flink {@link Configuration}
-     */
-    private static Configuration parseTypeSafeConfig(File configFile) {
-        Configuration flinkConfiguration = new Configuration();
-        Config typesafeConfig = ConfigFactory.parseFile(configFile);
-        for (Map.Entry<String, ConfigValue> entry : typesafeConfig.entrySet()) {
-            String key = entry.getKey();
-            ConfigValue value = entry.getValue();
-            switch (value.valueType()) {
-                case BOOLEAN:
-                    flinkConfiguration.setBoolean(key, (Boolean) value.unwrapped());
-                    break;
-                case NUMBER:
-                    Number number = (Number) value.unwrapped();
-                    if (number instanceof Float) {
-                        flinkConfiguration.setFloat(key, number.floatValue());
-                    } else if (number instanceof Double) {
-                        flinkConfiguration.setDouble(key, number.doubleValue());
-                    } else if (number instanceof Long) {
-                        flinkConfiguration.setLong(key, number.longValue());
-                    } else {
-                        flinkConfiguration.setInteger(key, number.intValue());
-                    }
-                    break;
-                case STRING:
-                    flinkConfiguration.setString(key, (String) value.unwrapped());
-                    break;
-                default:
-                    throw new IllegalArgumentException(String.format(
-                            "Unsupported value type '%s' for key '%s'.",
-                            value.valueType(), key
-                    ));
-            }
-        }
-        return flinkConfiguration;
     }
 
     /**
@@ -366,7 +251,7 @@ public class ANDY implements InclusionDependencyAlgorithm,
     }
 
     /**
-     * Create proper table indices as required by {@link Sindy} and also retrieve table and column names.
+     * Create proper table indices as required by {@link Andy} and also retrieve table and column names.
      *
      * @param inputGenerators that should be indexed
      * @param numColumnBits   the number of column bits in the table IDs; e.g. use 16 to share bits evenly among tables and columns

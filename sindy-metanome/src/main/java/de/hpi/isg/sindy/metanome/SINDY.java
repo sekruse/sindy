@@ -1,13 +1,9 @@
 package de.hpi.isg.sindy.metanome;
 
-import au.com.bytecode.opencsv.CSVParser;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigValue;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.properties.MetanomePropertyLedger;
-import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
+import de.hpi.isg.sindy.metanome.util.FlinkUtils;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
 import de.metanome.algorithm_integration.AlgorithmConfigurationException;
@@ -26,13 +22,11 @@ import de.metanome.algorithm_integration.results.InclusionDependency;
 import de.metanome.backend.input.file.DefaultFileInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntCollection;
 import org.apache.flink.api.java.ExecutionEnvironment;
-import org.apache.flink.configuration.ConfigConstants;
-import org.apache.flink.configuration.Configuration;
 
-import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Metanome interface for the {@link Sindy} algorithm.
@@ -102,13 +96,13 @@ public class SINDY implements InclusionDependencyAlgorithm,
      * An optional {@code host:port} specification of a remote Flink master.
      */
     @MetanomeProperty
-    private String flinkMaster = null;
+    private String flinkMaster;
 
     /**
      * An optional Flink configuration file.
      */
     @MetanomeProperty
-    private String flinkConfig = null;
+    private String flinkConfig;
 
 
     /**
@@ -153,8 +147,9 @@ public class SINDY implements InclusionDependencyAlgorithm,
         }
 
         // Set up Flink.
-        ExecutionEnvironment executionEnvironment = this.createExecutionEnvironment();
-
+        ExecutionEnvironment executionEnvironment = FlinkUtils.createExecutionEnvironment(
+                this.flinkMaster, this.parallelism, this.flinkConfig
+        );
         // Configure Sindy.
         Sindy sindy = new Sindy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
@@ -207,100 +202,6 @@ public class SINDY implements InclusionDependencyAlgorithm,
     }
 
     /**
-     * Create a {@link ExecutionEnvironment} according to the configuration of this instance.
-     *
-     * @return the readily configured {@link ExecutionEnvironment}
-     */
-    private ExecutionEnvironment createExecutionEnvironment() throws AlgorithmExecutionException {
-        // Load a config if any.
-        Configuration flinkConfiguration = this.flinkConfig != null
-                ? parseTypeSafeConfig(new File(this.flinkConfig))
-                : new Configuration();
-        if (this.parallelism != -1)
-            flinkConfiguration.setInteger(ConfigConstants.DEFAULT_PARALLELISM_KEY, this.parallelism);
-
-        // Create a default or a remote execution environment.
-        ExecutionEnvironment executionEnvironment;
-        if (this.flinkMaster == null) {
-            executionEnvironment = ExecutionEnvironment.createLocalEnvironment(flinkConfiguration);
-        } else {
-            String[] hostAndPort = this.flinkMaster.split(":");
-            executionEnvironment = ExecutionEnvironment.createRemoteEnvironment(
-                    hostAndPort[0],
-                    Integer.parseInt(hostAndPort[1]),
-                    flinkConfiguration,
-                    collectContainingJars(this.getClass(), IntCollection.class, CSVParser.class)
-            );
-        }
-
-        if (this.parallelism != -1) executionEnvironment.setParallelism(this.parallelism);
-
-        return executionEnvironment;
-    }
-
-    /**
-     * Collects the JAR files that the given {@code classes} reside in.
-     *
-     * @param classes {@link Class}es
-     * @return an array of paths to the JAR files
-     * @throws AlgorithmExecutionException if any of the {@link Class}es does not reside in a JAR file
-     */
-    private static String[] collectContainingJars(Class<?>... classes) throws AlgorithmExecutionException {
-        Set<String> jars = new HashSet<>();
-        for (Class<?> cls : classes) {
-            String file = cls.getProtectionDomain().getCodeSource().getLocation().getFile();
-            if (!file.endsWith(".jar")) {
-                throw new AlgorithmExecutionException(String.format(
-                        "%s does not reside in a JAR file (but in %s).", cls, file
-                ));
-            }
-            jars.add(file);
-        }
-        return jars.toArray(new String[jars.size()]);
-    }
-
-    /**
-     * Parse a Typesafe {@link Config} file.
-     *
-     * @param configFile the {@link File} to parse
-     * @return a Flink {@link Configuration}
-     */
-    private static Configuration parseTypeSafeConfig(File configFile) {
-        Configuration flinkConfiguration = new Configuration();
-        Config typesafeConfig = ConfigFactory.parseFile(configFile);
-        for (Map.Entry<String, ConfigValue> entry : typesafeConfig.entrySet()) {
-            String key = entry.getKey();
-            ConfigValue value = entry.getValue();
-            switch (value.valueType()) {
-                case BOOLEAN:
-                    flinkConfiguration.setBoolean(key, (Boolean) value.unwrapped());
-                    break;
-                case NUMBER:
-                    Number number = (Number) value.unwrapped();
-                    if (number instanceof Float) {
-                        flinkConfiguration.setFloat(key, number.floatValue());
-                    } else if (number instanceof Double) {
-                        flinkConfiguration.setDouble(key, number.doubleValue());
-                    } else if (number instanceof Long) {
-                        flinkConfiguration.setLong(key, number.longValue());
-                    } else {
-                        flinkConfiguration.setInteger(key, number.intValue());
-                    }
-                    break;
-                case STRING:
-                    flinkConfiguration.setString(key, (String) value.unwrapped());
-                    break;
-                default:
-                    throw new IllegalArgumentException(String.format(
-                            "Unsupported value type '%s' for key '%s'.",
-                            value.valueType(), key
-                    ));
-            }
-        }
-        return flinkConfiguration;
-    }
-
-    /**
      * Translates an {@link IND} to a {@link InclusionDependency}.
      *
      * @param ind                that should be translated
@@ -308,7 +209,7 @@ public class SINDY implements InclusionDependencyAlgorithm,
      * @param columnBitMask      marks the column bits in the column IDs
      * @return the {@link InclusionDependency}
      */
-    private InclusionDependency translate(IND ind, Int2ObjectMap<Table> indexedInputTables, int columnBitMask) {
+    private InclusionDependency translate(IND ind, Int2ObjectMap<SINDY.Table> indexedInputTables, int columnBitMask) {
         InclusionDependency inclusionDependency;
         if (ind.getArity() == 0) {
             inclusionDependency = new InclusionDependency(
