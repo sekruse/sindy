@@ -8,7 +8,7 @@ import de.hpi.isg.sindy.core.Andy;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.properties.MetanomePropertyLedger;
-import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
+import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
 import de.metanome.algorithm_integration.AlgorithmConfigurationException;
@@ -103,13 +103,13 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * An optional {@code host:port} specification of a remote Flink master.
      */
     @MetanomeProperty
-    private final String flinkMaster;
+    private String flinkMaster;
 
     /**
      * An optional Flink configuration file.
      */
     @MetanomeProperty
-    private final String flinkConfig;
+    private String flinkConfig;
 
 
     /**
@@ -205,6 +205,13 @@ public class ANDY implements InclusionDependencyAlgorithm,
             InclusionDependency inclusionDependency = this.translate(ind, indexedInputTables, columnBitMask);
             this.resultReceiver.receiveResult(inclusionDependency);
         }
+
+        // Print the IARs, so that they are not completely lost.
+        System.out.println("IND augmentation rules:");
+        for (IndAugmentationRule iar : andy.getAugmentationRules()) {
+            System.out.println(this.format(iar, indexedInputTables, columnBitMask));
+        }
+        System.out.println("END");
     }
 
     /**
@@ -342,6 +349,20 @@ public class ANDY implements InclusionDependencyAlgorithm,
             inclusionDependency = new InclusionDependency(dep, ref);
         }
         return inclusionDependency;
+    }
+
+    /**
+     * Formats an {@link IndAugmentationRule}.
+     *
+     * @param iar                that should be translated
+     * @param indexedInputTables the indexed tables
+     * @param columnBitMask      marks the column bits in the column IDs
+     * @return the formatted {@link String}
+     */
+    private String format(IndAugmentationRule iar, Int2ObjectMap<ANDY.Table> indexedInputTables, int columnBitMask) {
+        InclusionDependency lhs = this.translate(iar.getLhs(), indexedInputTables, columnBitMask);
+        InclusionDependency rhs = this.translate(iar.getRhs(), indexedInputTables, columnBitMask);
+        return String.format("%s => %s", lhs, rhs);
     }
 
     /**
