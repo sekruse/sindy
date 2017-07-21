@@ -86,6 +86,10 @@ public class Andy extends AbstractSindy implements Runnable {
             }
         }
 
+        if (this.isExcludeVoidIndsFromCandidateGeneration) {
+            this.logger.warn("Exclusion of void INDs from candidate generation is ignored. They are handled as augmentation rules.");
+        }
+
         this.numDiscoveredInds = 0;
     }
 
@@ -162,10 +166,10 @@ public class Andy extends AbstractSindy implements Runnable {
             // Determine distinct value count of dependent and referenced column.
             int depColumnId = ind.getDependentColumns()[0];
             int refColumnId = ind.getReferencedColumns()[0];
-            if (simpleDistinctValueCounts.get(depColumnId) == 0 && simpleDistinctValueCounts.get(refColumnId) == 1) {
+            if (simpleDistinctValueCounts.get(depColumnId) == 0 || simpleDistinctValueCounts.get(refColumnId) == 1) {
                 IndAugmentationRule iar = new IndAugmentationRule(IND.emptyInstance, ind);
                 this.augmentationRules.add(iar);
-                System.out.printf("Discovered %s.\n", iar);
+                this.logger.debug("Discovered {}.\n", iar);
                 iter.remove();
             }
         }
@@ -187,7 +191,7 @@ public class Andy extends AbstractSindy implements Runnable {
             }
 
             // Generate n-ary IND candidates.
-            final Set<IND> indCandidates = this.generateCandidates(this.newInds);
+            final Set<IND> indCandidates = this.generateCandidates(this.newInds, distinctValueCountsByArity.get(newArity - 2));
             if (indCandidates.isEmpty()) {
                 break;
             }
@@ -207,7 +211,7 @@ public class Andy extends AbstractSindy implements Runnable {
                                     Andy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
                                 }
                             };
-            jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
+            jobName = String.format("ANDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
             this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
 
             // Collect the number of distinct values and null values per column combination.
@@ -240,30 +244,39 @@ public class Andy extends AbstractSindy implements Runnable {
             Object2IntMap<IntList> curNullValueCounts = nullValueCountsByArity.get(newArity - 1);
             for (Iterator<IND> iter = this.newInds.iterator(); iter.hasNext(); ) {
                 IND newInd = iter.next();
+                boolean isIarEmbedded = false;
 
                 // First check, whether the new IND is void.
                 IntList sortedDepColumnIds = toSortedIntList(newInd.getDependentColumns());
                 int numDepDistinctValues = curDistinctValueCounts.getInt(sortedDepColumnIds);
-                if (numDepDistinctValues == 0) continue;
-
-                // Otherwise, check for possible IND ARs.
-                boolean isIarEmbedded = false;
-                IntList sortedRefColumnIds = toSortedIntList(newInd.getReferencedColumns());
-                int numRefDistinctValues = curDistinctValueCounts.getInt(sortedRefColumnIds);
-                int numRefNullValues = curNullValueCounts.getInt(sortedRefColumnIds);
-                for (int i = 0; i < newInd.getArity(); i++) {
-                    IND generalization = newInd.coproject(i);
-                    IntList sortedGenRefColumnIds = toSortedIntList(generalization.getReferencedColumns());
-                    int numGenRefDistinctValues = prevDistinctValueCounts.getInt(sortedGenRefColumnIds);
-                    int numGenRefNullValues = prevNullValueCounts.getInt(sortedGenRefColumnIds);
-                    if (numRefDistinctValues == numGenRefDistinctValues && numRefNullValues == numGenRefNullValues) {
+                if (numDepDistinctValues == 0) {
+                    // If we are not excluding void INDs from candidate generation, then we stave off their search space
+                    // inflation by issuing IND ARs.
+                    for (int i = 0; i < newInd.getArity(); i++) {
+                        IND generalization = newInd.coproject(i);
                         IndAugmentationRule iar = new IndAugmentationRule(generalization, newInd.project(i));
                         this.augmentationRules.add(iar);
-                        System.out.printf("Discovered %s.\n", iar);
-                        isIarEmbedded = true;
+                        this.logger.debug("Discovered {} (void IND).\n", iar);                    }
+                    isIarEmbedded = true;
+
+                } else {
+                    // Otherwise, check for possible IND ARs.
+                    IntList sortedRefColumnIds = toSortedIntList(newInd.getReferencedColumns());
+                    int numRefDistinctValues = curDistinctValueCounts.getInt(sortedRefColumnIds);
+                    int numRefNullValues = curNullValueCounts.getInt(sortedRefColumnIds);
+                    for (int i = 0; i < newInd.getArity(); i++) {
+                        IND generalization = newInd.coproject(i);
+                        IntList sortedGenRefColumnIds = toSortedIntList(generalization.getReferencedColumns());
+                        int numGenRefDistinctValues = prevDistinctValueCounts.getInt(sortedGenRefColumnIds);
+                        int numGenRefNullValues = prevNullValueCounts.getInt(sortedGenRefColumnIds);
+                        if (numRefDistinctValues == numGenRefDistinctValues && numRefNullValues == numGenRefNullValues) {
+                            IndAugmentationRule iar = new IndAugmentationRule(generalization, newInd.project(i));
+                            this.augmentationRules.add(iar);
+                            this.logger.debug("Discovered {}.\n", iar);
+                            isIarEmbedded = true;
+                        }
                     }
                 }
-
                 if (isIarEmbedded) iter.remove();
             }
 
@@ -278,6 +291,7 @@ public class Andy extends AbstractSindy implements Runnable {
 
     /**
      * Returns a sorted version of the given {@link IntList}.
+     *
      * @param intList that should be sorted
      * @return the given {@link IntList} if it was sorted already; otherwise a sorted copy of the same
      */
@@ -300,6 +314,7 @@ public class Andy extends AbstractSindy implements Runnable {
 
     /**
      * Returns a sorted {@link IntList} of the given {@code int} array.
+     *
      * @param intArray that should be sorted and converted
      * @return the given {@link IntList} if it was sorted already; otherwise a sorted copy of the same
      */
@@ -314,7 +329,7 @@ public class Andy extends AbstractSindy implements Runnable {
      * @param knownInds {@link IND}s that have been found since the last candidate generation (TODO: revise?)
      * @return the generated {@link IND} candidates
      */
-    private Set<IND> generateCandidates(Collection<IND> knownInds) {
+    private Set<IND> generateCandidates(Collection<IND> knownInds, Object2IntMap<IntList> distinctValueCounts) {
         Map<IndSubspaceKey, SortedSet<IND>> groupedInds = INDs.groupIntoSubspaces(knownInds, this.columnBitMask);
         final Set<IND> indCandidates = new HashSet<>();
         for (Map.Entry<IndSubspaceKey, SortedSet<IND>> entry : groupedInds.entrySet()) {
@@ -322,7 +337,9 @@ public class Andy extends AbstractSindy implements Runnable {
             this.candidateGenerator.generate(
                     entry.getValue(), entry.getKey(),
                     this.naryIndRestrictions,
-                    null, // TODO
+                    this.isExcludeVoidIndsFromCandidateGeneration ?
+                            ind -> distinctValueCounts.getInt(toSortedIntList(ind.getDependentColumns())) > 0 :
+                            null,
                     this.maxArity,
                     indCandidates
             );
@@ -432,4 +449,12 @@ public class Andy extends AbstractSindy implements Runnable {
         return this.allInds;
     }
 
+    /**
+     * Retrieve the collected {@link IndAugmentationRule}s.
+     *
+     * @return the {@link IndAugmentationRule}s
+     */
+    public Collection<IndAugmentationRule> getAugmentationRules() {
+        return this.augmentationRules;
+    }
 }
