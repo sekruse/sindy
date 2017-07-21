@@ -2,6 +2,9 @@ package de.hpi.isg.sindy.searchspace;
 
 
 import de.hpi.isg.sindy.util.IND;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+
+import java.util.Objects;
 
 /**
  * An IND augmentation rule reflects the fact that an n-ary inclusion dependency contains an FD
@@ -29,8 +32,29 @@ public class IndAugmentationRule {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || this.getClass() != o.getClass()) return false;
+        final IndAugmentationRule that = (IndAugmentationRule) o;
+        return Objects.equals(this.lhs, that.lhs) &&
+                Objects.equals(this.rhs, that.rhs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.lhs, this.rhs);
+    }
+
+    @Override
     public String toString() {
         return String.format("\u3008%s\u3009 \u21C9 \u3008%s\u3009", this.lhs, this.rhs);
+    }
+
+    public Object toString(Int2ObjectMap<String> indexedInputFiles, int numColumnBits) {
+        return String.format("\u3008%s\u3009 \u21C9 \u3008%s\u3009",
+                this.lhs.toString(indexedInputFiles, numColumnBits),
+                this.rhs.toString(indexedInputFiles, numColumnBits)
+        );
     }
 }
 
