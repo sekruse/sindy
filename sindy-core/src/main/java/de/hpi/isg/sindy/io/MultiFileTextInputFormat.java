@@ -178,7 +178,7 @@ public class MultiFileTextInputFormat extends DelimitedInputFormat<IntObjectTupl
     }
 
     @Override
-    protected boolean acceptFile(final FileStatus fileStatus) {
+    public boolean acceptFile(final FileStatus fileStatus) {
         // If the file of this format is a directory (which this format expects), we need to make sure
         // that this base directory passes the file filter.
         boolean isBaseDir = false;

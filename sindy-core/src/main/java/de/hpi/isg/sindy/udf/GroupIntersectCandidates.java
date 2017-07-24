@@ -1,6 +1,7 @@
 package de.hpi.isg.sindy.udf;
 
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import org.apache.flink.api.common.functions.GroupCombineFunction;
 import org.apache.flink.api.common.functions.RichGroupReduceFunction;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -16,13 +17,14 @@ import java.util.Iterator;
  * <li><b>Input/Output:</b> <i>(included attribute, including attributes)</i></li>
  * </ul>
  * Expects the reduce key to be the included attribute.
- * 
+ *
  * @author Sebastian Kruse
  */
-@RichGroupReduceFunction.Combinable
 @FunctionAnnotation.ForwardedFields("0")
 @FunctionAnnotation.ReadFields("1")
-public class GroupIntersectCandidates extends RichGroupReduceFunction<Tuple3<Integer, Integer, int[]>, Tuple3<Integer, Integer, int[]>> {
+public class GroupIntersectCandidates
+        extends RichGroupReduceFunction<Tuple3<Integer, Integer, int[]>, Tuple3<Integer, Integer, int[]>>
+        implements GroupCombineFunction<Tuple3<Integer, Integer, int[]>, Tuple3<Integer, Integer, int[]>> {
 
     private static final long serialVersionUID = -8495767609476386745L;
 
@@ -32,9 +34,14 @@ public class GroupIntersectCandidates extends RichGroupReduceFunction<Tuple3<Int
     private IntOpenHashSet intersection2 = new IntOpenHashSet();
 
     @Override
-    public void reduce(
-            final Iterable<Tuple3<Integer, Integer, int[]>> iterable,
-            final Collector<Tuple3<Integer, Integer, int[]>> out) throws Exception {
+    public void combine(final Iterable<Tuple3<Integer, Integer, int[]>> iterable,
+                        final Collector<Tuple3<Integer, Integer, int[]>> out) throws Exception {
+        this.reduce(iterable, out);
+    }
+
+    @Override
+    public void reduce(final Iterable<Tuple3<Integer, Integer, int[]>> iterable,
+                       final Collector<Tuple3<Integer, Integer, int[]>> out) throws Exception {
 
         Iterator<Tuple3<Integer, Integer, int[]>> iterator = iterable.iterator();
         Tuple3<Integer, Integer, int[]> firstCandidates = iterator.next();

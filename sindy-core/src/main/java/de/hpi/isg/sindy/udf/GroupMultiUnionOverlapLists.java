@@ -3,6 +3,7 @@ package de.hpi.isg.sindy.udf;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
+import org.apache.flink.api.common.functions.GroupCombineFunction;
 import org.apache.flink.api.common.functions.RichGroupReduceFunction;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.tuple.Tuple4;
@@ -16,10 +17,10 @@ import java.util.Iterator;
  *
  * Created by basti on 8/7/15.
  */
-@RichGroupReduceFunction.Combinable
 @FunctionAnnotation.ForwardedFields("0")
 public class GroupMultiUnionOverlapLists
-        extends RichGroupReduceFunction<Tuple4<Integer, Integer, int[], int[]>, Tuple4<Integer, Integer, int[], int[]>> {
+        extends RichGroupReduceFunction<Tuple4<Integer, Integer, int[], int[]>, Tuple4<Integer, Integer, int[], int[]>>
+        implements GroupCombineFunction<Tuple4<Integer, Integer, int[], int[]>, Tuple4<Integer, Integer, int[], int[]>> {
 
     /**
      * Aggregates the counts of each encountered attribute.
@@ -30,6 +31,13 @@ public class GroupMultiUnionOverlapLists
     }
 
     private Tuple4<Integer, Integer, int[], int[]> outputTuple = new Tuple4<>();
+
+
+    @Override
+    public void combine(Iterable<Tuple4<Integer, Integer, int[], int[]>> inputAttributeLists,
+                        Collector<Tuple4<Integer, Integer, int[], int[]>> collector) throws Exception {
+        this.reduce(inputAttributeLists, collector);
+    }
 
     @Override
     public void reduce(Iterable<Tuple4<Integer, Integer, int[], int[]>> inputAttributeLists,
@@ -77,8 +85,4 @@ public class GroupMultiUnionOverlapLists
         collector.collect(this.outputTuple);
     }
 
-    @Override
-    public void combine(Iterable<Tuple4<Integer, Integer, int[], int[]>> values, Collector<Tuple4<Integer, Integer, int[], int[]>> out) throws Exception {
-        super.combine(values, out);
-    }
 }

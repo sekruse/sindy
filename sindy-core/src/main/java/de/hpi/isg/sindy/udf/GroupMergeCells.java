@@ -13,6 +13,7 @@
 package de.hpi.isg.sindy.udf;
 
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import org.apache.flink.api.common.functions.GroupCombineFunction;
 import org.apache.flink.api.common.functions.RichGroupReduceFunction;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -25,17 +26,24 @@ import java.util.Iterator;
  *
  * @author Sebastian Kruse
  */
-@RichGroupReduceFunction.Combinable
 @FunctionAnnotation.ReadFields("1")
 @FunctionAnnotation.ForwardedFields("0")
 @SuppressWarnings("serial")
-public class GroupMergeCells extends RichGroupReduceFunction<Tuple2<String, int[]>, Tuple2<String, int[]>> {
+public class GroupMergeCells
+        extends RichGroupReduceFunction<Tuple2<String, int[]>, Tuple2<String, int[]>>
+        implements GroupCombineFunction<Tuple2<String, int[]>, Tuple2<String, int[]>> {
 
     private final IntOpenHashSet accumulator = new IntOpenHashSet();
-    
+
+    @Override
+    public void combine(Iterable<Tuple2<String, int[]>> iterable,
+                        Collector<Tuple2<String, int[]>> out) throws Exception {
+        this.reduce(iterable, out);
+    }
+
     @Override
     public void reduce(Iterable<Tuple2<String, int[]>> iterable,
-                                             Collector<Tuple2<String, int[]>> out) throws Exception {
+                       Collector<Tuple2<String, int[]>> out) throws Exception {
 
         Iterator<Tuple2<String, int[]>> iterator = iterable.iterator();
         Tuple2<String, int[]> firstCell = iterator.next();
