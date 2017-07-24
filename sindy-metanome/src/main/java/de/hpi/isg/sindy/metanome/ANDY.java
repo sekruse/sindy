@@ -18,24 +18,25 @@ import de.metanome.algorithm_integration.configuration.ConfigurationSettingFileI
 import de.metanome.algorithm_integration.input.FileInputGenerator;
 import de.metanome.algorithm_integration.input.InputGenerationException;
 import de.metanome.algorithm_integration.input.RelationalInput;
+import de.metanome.algorithm_integration.input.RelationalInputGenerator;
 import de.metanome.algorithm_integration.result_receiver.InclusionDependencyResultReceiver;
 import de.metanome.algorithm_integration.results.InclusionDependency;
 import de.metanome.backend.input.file.DefaultFileInputGenerator;
+import de.metanome.cli.HdfsInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.apache.flink.api.java.ExecutionEnvironment;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Metanome interface for the {@link Andy} algorithm.
  */
 public class ANDY implements InclusionDependencyAlgorithm,
-        StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm, FileInputParameterAlgorithm {
+        StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm,
+        RelationalInputParameterAlgorithm {
 
-    private FileInputGenerator[] fileInputGenerators;
+    private List<RelationalInputGenerator> inputGenerators = new ArrayList<>();
 
     private InclusionDependencyResultReceiver resultReceiver;
 
@@ -135,7 +136,7 @@ public class ANDY implements InclusionDependencyAlgorithm,
     @Override
     public void execute() throws AlgorithmExecutionException {
         // Index the input files.
-        Int2ObjectMap<ANDY.Table> indexedInputTables = indexTables(this.fileInputGenerators, this.numColumnBits);
+        Int2ObjectMap<ANDY.Table> indexedInputTables = indexTables(this.inputGenerators, this.numColumnBits);
         Int2ObjectMap<String> indexedInputFiles = new Int2ObjectOpenHashMap<>();
         for (Map.Entry<Integer, ANDY.Table> entry : indexedInputTables.entrySet()) {
             indexedInputFiles.put(entry.getKey(), entry.getValue().url);
@@ -150,19 +151,28 @@ public class ANDY implements InclusionDependencyAlgorithm,
         Andy andy = new Andy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
         andy.setMaxArity(this.maxArity);
-        if (this.fileInputGenerators[0] instanceof DefaultFileInputGenerator) {
-            DefaultFileInputGenerator fileInputGenerator = (DefaultFileInputGenerator) this.fileInputGenerators[0];
-            ConfigurationSettingFileInput setting = fileInputGenerator.getSetting();
-            andy.setFieldSeparator(setting.getSeparatorAsChar());
-            andy.setQuoteChar(setting.getQuoteCharAsChar());
-            andy.setEscapeChar(setting.getEscapeCharAsChar());
-            andy.setNullString(setting.getNullValue());
-            andy.setDropDifferingLines(setting.isSkipDifferingLines());
-            andy.setIgnoreLeadingWhiteSpace(setting.isIgnoreLeadingWhiteSpace());
-            andy.setUseStrictQuotes(setting.isStrictQuotes());
-        } else {
-            System.err.println("Could not read CSV settings from Metanome configuration.");
+        if (!this.inputGenerators.isEmpty()) {
+            RelationalInputGenerator inputGenerator = this.inputGenerators.get(0);
+            ConfigurationSettingFileInput fileInputSettings = null;
+            if (inputGenerator instanceof DefaultFileInputGenerator) {
+                fileInputSettings = ((DefaultFileInputGenerator) inputGenerator).getSetting();
+            } else if (inputGenerator instanceof HdfsInputGenerator) {
+                fileInputSettings = ((HdfsInputGenerator) inputGenerator).getSettings();
+            }
+
+            if (fileInputSettings != null) {
+                andy.setFieldSeparator(fileInputSettings.getSeparatorAsChar());
+                andy.setQuoteChar(fileInputSettings.getQuoteCharAsChar());
+                andy.setEscapeChar(fileInputSettings.getEscapeCharAsChar());
+                andy.setNullString(fileInputSettings.getNullValue());
+                andy.setDropDifferingLines(fileInputSettings.isSkipDifferingLines());
+                andy.setIgnoreLeadingWhiteSpace(fileInputSettings.isIgnoreLeadingWhiteSpace());
+                andy.setUseStrictQuotes(fileInputSettings.isStrictQuotes());
+            } else {
+                System.err.println("Could not read CSV settings from Metanome configuration.");
+            }
         }
+
         andy.setDropNulls(this.isDropNulls);
         andy.setSampleRows(this.sampleRows);
         andy.setMaxColumns(this.maxColumns);
@@ -257,16 +267,16 @@ public class ANDY implements InclusionDependencyAlgorithm,
      * @param numColumnBits   the number of column bits in the table IDs; e.g. use 16 to share bits evenly among tables and columns
      * @return the indexed table descriptions
      */
-    public static Int2ObjectMap<ANDY.Table> indexTables(FileInputGenerator[] inputGenerators, int numColumnBits) {
+    public static Int2ObjectMap<ANDY.Table> indexTables(Collection<RelationalInputGenerator> inputGenerators, int numColumnBits) {
         Int2ObjectMap<ANDY.Table> index = new Int2ObjectOpenHashMap<>();
         int bitmask = -1 >>> (Integer.SIZE - numColumnBits);
         int tableIdDelta = bitmask + 1;
         int tableId = bitmask;
-        for (FileInputGenerator inputGenerator : inputGenerators) {
+        for (RelationalInputGenerator inputGenerator : inputGenerators) {
             try {
                 RelationalInput input = inputGenerator.generateNewCopy();
                 ANDY.Table table = new ANDY.Table(
-                        inputGenerator.getInputFile().getAbsoluteFile().toURI().toString(),
+                        getUrl(inputGenerator),
                         input.relationName(),
                         input.columnNames()
                 );
@@ -277,6 +287,16 @@ public class ANDY implements InclusionDependencyAlgorithm,
             }
         }
         return index;
+    }
+
+    private static String getUrl(RelationalInputGenerator relationalInputGenerator) {
+        if (relationalInputGenerator instanceof FileInputGenerator) {
+            return ((FileInputGenerator) relationalInputGenerator).getInputFile().getAbsoluteFile().toURI().toString();
+        }
+        if (relationalInputGenerator instanceof HdfsInputGenerator) {
+            return ((HdfsInputGenerator) relationalInputGenerator).getUrl();
+        }
+        throw new IllegalArgumentException(String.format("Cannot extract URL from %s.", relationalInputGenerator));
     }
 
     @Override
@@ -290,9 +310,9 @@ public class ANDY implements InclusionDependencyAlgorithm,
     }
 
     @Override
-    public void setFileInputConfigurationValue(String identifier, FileInputGenerator... values) throws AlgorithmConfigurationException {
+    public void setRelationalInputConfigurationValue(String identifier, RelationalInputGenerator... values) throws AlgorithmConfigurationException {
         if ("inputFiles".equalsIgnoreCase(identifier)) {
-            this.fileInputGenerators = values;
+            this.inputGenerators.addAll(Arrays.asList(values));
         } else {
             throw new AlgorithmConfigurationException("Unknown file input configuration.");
         }
