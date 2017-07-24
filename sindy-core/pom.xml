@@ -6,19 +6,19 @@
 
     <parent>
         <groupId>de.hpi.isg</groupId>
-        <artifactId>sindy_2.10</artifactId>
+        <artifactId>sindy_2.11</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>sindy-core_2.10</artifactId>
+    <artifactId>sindy-core_2.11</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-java_${scala.version}</artifactId>
+            <artifactId>flink-java</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-clients_${scala.version}</artifactId>
+            <artifactId>flink-clients_${scala.compat.version}</artifactId>
         </dependency>
         <dependency>
             <groupId>it.unimi.dsi</groupId>

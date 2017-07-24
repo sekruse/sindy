@@ -37,3 +37,12 @@ find "$basedir" -name pom.xml -a -type f -exec \
 	-e "s/<scala.compat.version>$old_major<\/scala.compat.version>/<scala.compat.version>$new_major<\/scala.compat.version>/" \
 	-e "s/_$old_major<\//_$new_major<\//" \
 	{} ';'
+
+# Apparently not needed anymore to distinguish flink-java and flink-java_2.11
+# if [ "$new_major" = "2.10" ]; then
+# 	find "$basedir" -name pom.xml -a -type f -exec \
+# 		sed "${sed_opts[@]}" -e "s/<artifactId>flink-java_\${scala.compat.version}<\/artifactId>/<artifactId>flink-java<\/artifactId>/" {} ';'
+# else
+# 	find "$basedir" -name pom.xml -a -type f -exec \
+# 		sed "${sed_opts[@]}" -e "s/<artifactId>flink-java<\/artifactId>/<artifactId>flink-java_\${scala.compat.version}<\/artifactId>/" {} ';'
+# fi
