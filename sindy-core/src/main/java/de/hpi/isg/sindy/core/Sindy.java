@@ -180,6 +180,7 @@ public class Sindy extends AbstractSindy implements Runnable {
                     }
                 }
             }
+            this.updateExperimentWithDatasetSize(result);
         }
 
         // Now perform n-ary IND detection using the Apriori candidate generation.

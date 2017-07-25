@@ -83,7 +83,7 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         this.tableWidthAccumulator = new TableWidthAccumulator();
         this.getRuntimeContext().addAccumulator(TableWidthAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
         this.tableHeightAccumulator = new TableHeightAccumulator();
-        this.getRuntimeContext().addAccumulator(TableHeightAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
+        this.getRuntimeContext().addAccumulator(TableHeightAccumulator.DEFAULT_KEY, this.tableHeightAccumulator);
         this.nullValueCounter = new NullValueCounter();
         this.getRuntimeContext().addAccumulator(NullValueCounter.DEFAULT_KEY, this.nullValueCounter);
     }

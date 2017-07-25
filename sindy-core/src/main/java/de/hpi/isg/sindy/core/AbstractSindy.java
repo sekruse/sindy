@@ -1,5 +1,6 @@
 package de.hpi.isg.sindy.core;
 
+import de.hpi.isg.profiledb.store.model.Experiment;
 import de.hpi.isg.sindy.data.IntObjectTuple;
 import de.hpi.isg.sindy.io.MultiFileTextInputFormat;
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
@@ -7,11 +8,9 @@ import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
 import de.hpi.isg.sindy.searchspace.CandidateGenerator;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.udf.*;
-import de.hpi.isg.sindy.util.Encoding;
-import de.hpi.isg.sindy.util.FileUtils;
-import de.hpi.isg.sindy.util.IND;
-import de.hpi.isg.sindy.util.JobMeasurement;
+import de.hpi.isg.sindy.util.*;
 import it.unimi.dsi.fastutil.ints.*;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.commons.lang3.Validate;
@@ -168,6 +167,11 @@ public abstract class AbstractSindy {
      * Whether inclusion dependencies should only be counted rather than collected.
      */
     protected boolean isOnlyCountInds;
+
+    /**
+     * Optional {@link Experiment} to store experimental data.
+     */
+    protected Experiment experiment;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Code.                                                                                                          //
@@ -613,6 +617,32 @@ public abstract class AbstractSindy {
         this.jobMeasurements.add(jobMeasurement);
     }
 
+    /**
+     * Update the {@link #experiment} with data about the number of columns and tuples from the analyzed dataset.
+     *
+     * @param result of the Flink job that analyzed a dataset
+     */
+    protected void updateExperimentWithDatasetSize(JobExecutionResult result) {
+        if (this.experiment != null) {
+            Int2IntMap tableWidths = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
+            Int2LongOpenHashMap tableHeights = result.getAccumulatorResult(TableHeightAccumulator.DEFAULT_KEY);
+            if (tableWidths != null && tableHeights != null) {
+                int numColumns = 0;
+                long numTuples = 0L;
+                for (IntIterator iter = tableWidths.values().iterator(); iter.hasNext(); ) {
+                    numColumns += iter.nextInt();
+                }
+                for (LongIterator iter = tableHeights.values().iterator(); iter.hasNext(); ) {
+                    numTuples += iter.nextLong();
+                }
+                DatasetMeasurement datasetMeasurement = new DatasetMeasurement("dataset");
+                datasetMeasurement.setNumColumns(numColumns);
+                datasetMeasurement.setNumTuples(numTuples);
+                this.experiment.addMeasurement(datasetMeasurement);
+            }
+        }
+    }
+
     public Int2ObjectMap<String> getInputFiles() {
         return this.inputFiles;
     }
@@ -778,6 +808,14 @@ public abstract class AbstractSindy {
 
     public void setExcludeVoidIndsFromCandidateGeneration(boolean excludeVoidIndsFromCandidateGeneration) {
         this.isExcludeVoidIndsFromCandidateGeneration = excludeVoidIndsFromCandidateGeneration;
+    }
+
+    public Experiment getExperiment() {
+        return this.experiment;
+    }
+
+    public void setExperiment(Experiment experiment) {
+        this.experiment = experiment;
     }
 
     @SuppressWarnings("serial")

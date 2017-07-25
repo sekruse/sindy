@@ -59,6 +59,7 @@ public class ANDY extends MetanomeIndAlgorithm {
                 break;
             }
         }
+        andy.setExperiment(this.experiment);
 
         // Run Andy.
         andy.run();

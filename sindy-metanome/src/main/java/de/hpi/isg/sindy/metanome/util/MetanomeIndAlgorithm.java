@@ -1,5 +1,6 @@
 package de.hpi.isg.sindy.metanome.util;
 
+import de.hpi.isg.profiledb.store.model.Experiment;
 import de.hpi.isg.sindy.core.AbstractSindy;
 import de.hpi.isg.sindy.core.Andy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
@@ -22,6 +23,7 @@ import de.metanome.algorithm_integration.input.RelationalInputGenerator;
 import de.metanome.algorithm_integration.result_receiver.InclusionDependencyResultReceiver;
 import de.metanome.algorithm_integration.results.InclusionDependency;
 import de.metanome.backend.input.file.DefaultFileInputGenerator;
+import de.metanome.cli.ExperimentParameterAlgorithm;
 import de.metanome.cli.HdfsInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -34,7 +36,7 @@ import java.util.*;
  */
 public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorithm,
         StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm,
-        RelationalInputParameterAlgorithm {
+        ExperimentParameterAlgorithm, RelationalInputParameterAlgorithm {
 
     protected List<RelationalInputGenerator> inputGenerators = new ArrayList<>();
 
@@ -105,6 +107,11 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
      * Keeps track of the configuration of this algorithm.
      */
     protected MetanomePropertyLedger propertyLedger;
+
+    /**
+     * Optional {@link Experiment} to store experimental data on.
+     */
+    protected Experiment experiment;
 
     @Override
     public void setResultReceiver(InclusionDependencyResultReceiver inclusionDependencyResultReceiver) {
@@ -306,6 +313,11 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
     @Override
     public void setStringConfigurationValue(String identifier, String... values) throws AlgorithmConfigurationException {
         this.getPropertyLedger().configure(this, identifier, (Object[]) values);
+    }
+
+    @Override
+    public void setProfileDBExperiment(Experiment experiment) throws AlgorithmConfigurationException {
+        this.experiment = experiment;
     }
 
     /**

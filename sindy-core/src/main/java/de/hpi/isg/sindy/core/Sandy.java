@@ -5,6 +5,7 @@ import de.hpi.isg.sindy.util.IND;
 import de.hpi.isg.sindy.util.PartialIND;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntList;
+import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.tuple.Tuple4;
@@ -112,6 +113,8 @@ public class Sandy extends AbstractSindy implements Runnable {
         String jobName = String.format("SANDY on %d tables (%s)", this.inputFiles.size(), new Date());
         this.newInds = new ArrayList<>();
         this.collectAsync(handleResultCommandFactory, overlaps, jobName);
+        JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
+        this.updateExperimentWithDatasetSize(result);
 
         this.allInds = this.newInds;
     }

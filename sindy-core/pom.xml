@@ -21,6 +21,10 @@
             <artifactId>flink-clients_${scala.compat.version}</artifactId>
         </dependency>
         <dependency>
+            <groupId>de.hpi.isg</groupId>
+            <artifactId>profiledb-store</artifactId>
+        </dependency>
+        <dependency>
             <groupId>it.unimi.dsi</groupId>
             <artifactId>fastutil</artifactId>
         </dependency>

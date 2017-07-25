@@ -1,32 +1,33 @@
 package de.hpi.isg.sindy.util;
 
-import it.unimi.dsi.fastutil.ints.Int2IntMap;
-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2LongMap;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import org.apache.flink.api.common.accumulators.Accumulator;
 
 /**
  * An {@link Accumulator} to count the number of {@code int}s.
  */
-public class IntCounter implements Accumulator<Integer, Int2IntOpenHashMap> {
+public class LongCounter implements Accumulator<Integer, Int2LongOpenHashMap> {
 
     /**
      * Maps table IDs to the number of columns in this table.
      */
-    protected final Int2IntOpenHashMap counts;
+    protected final Int2LongOpenHashMap counts;
 
     /**
      * Creates a new instance.
      */
-    public IntCounter() {
-        this(new Int2IntOpenHashMap());
+    public LongCounter() {
+        this(new Int2LongOpenHashMap());
     }
 
     /**
      * Creates a new instances with the given data.
+     *
      * @param counts the data
      */
-    IntCounter(Int2IntOpenHashMap counts) {
+    LongCounter(Int2LongOpenHashMap counts) {
         this.counts = counts;
         this.counts.defaultReturnValue(0);
     }
@@ -41,7 +42,7 @@ public class IntCounter implements Accumulator<Integer, Int2IntOpenHashMap> {
     }
 
     @Override
-    public Int2IntOpenHashMap getLocalValue() {
+    public Int2LongOpenHashMap getLocalValue() {
         return this.counts;
     }
 
@@ -51,15 +52,15 @@ public class IntCounter implements Accumulator<Integer, Int2IntOpenHashMap> {
     }
 
     @Override
-    public void merge(Accumulator<Integer, Int2IntOpenHashMap> accumulator) {
-        for (ObjectIterator<Int2IntMap.Entry> iter = accumulator.getLocalValue().int2IntEntrySet().fastIterator(); iter.hasNext();) {
-            Int2IntMap.Entry entry = iter.next();
-            this.counts.addTo(entry.getIntKey(), entry.getIntValue());
+    public void merge(Accumulator<Integer, Int2LongOpenHashMap> accumulator) {
+        for (ObjectIterator<Int2LongMap.Entry> iter = accumulator.getLocalValue().int2LongEntrySet().fastIterator(); iter.hasNext(); ) {
+            Int2LongMap.Entry entry = iter.next();
+            this.counts.addTo(entry.getIntKey(), entry.getLongValue());
         }
     }
 
     @Override
-    public Accumulator<Integer, Int2IntOpenHashMap> clone() {
-        return new IntCounter(this.counts);
+    public Accumulator<Integer, Int2LongOpenHashMap> clone() {
+        return new LongCounter(this.counts);
     }
 }

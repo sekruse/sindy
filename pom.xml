@@ -124,6 +124,11 @@
                 <artifactId>config</artifactId>
                 <version>1.3.1</version>
             </dependency>
+            <dependency>
+                <groupId>de.hpi.isg</groupId>
+                <artifactId>profiledb-store</artifactId>
+                <version>0.1.1</version>
+            </dependency>
 
             <!-- Metanome -->
             <dependency>

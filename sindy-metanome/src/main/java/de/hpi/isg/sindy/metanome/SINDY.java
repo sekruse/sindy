@@ -63,6 +63,7 @@ public class SINDY extends MetanomeIndAlgorithm {
                 break;
             }
         }
+        sindy.setExperiment(this.experiment);
 
         // Run Sindy.
         sindy.run();
