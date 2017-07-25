@@ -57,7 +57,7 @@ public class SINDYTest {
     @Test
     public void testMetanomeIntegration() throws AlgorithmExecutionException, FileNotFoundException {
         SINDY sindy = new SINDY();
-        sindy.setFileInputConfigurationValue("inputFiles",
+        sindy.setRelationalInputConfigurationValue("inputFiles",
                 getFileInputGenerator("letters.csv"), getFileInputGenerator("letters-ext.csv")
         );
 
