@@ -219,9 +219,9 @@ public abstract class AbstractSindy {
                 .createInput(inputFormat)
                 .name(String.format("CSV files (%d tables)", paths2minColumnId.size()));
 
-        if (this.sampleRows > 0) {
-//            source = source.filter(new SampleWithHashes<Tuple2<Integer, String>>(this.parameters.sampleRows, 100));
-            this.logger.warn("Sampling is currently not implemented.");
+        // Filter rows, if requested.
+        if (this.sampleRows > 0 && this.sampleRows < 100) {
+            source = source.filter(new SampleRoundRobin<>(this.sampleRows));
         }
 
         // Split the lines into pivot elements.
@@ -278,10 +278,13 @@ public abstract class AbstractSindy {
                 .createInput(inputFormat)
                 .name(String.format("CSV files (%d tables)", paths2minColumnId.size()));
 
-        if (this.sampleRows > 0) {
-//            source = source.filter(new SampleWithHashes<Tuple2<Integer, String>>(this.parameters.sampleRows, 100));
-            this.logger.warn("Sampling is currently not implemented.");
+        // Filter rows, if requested.
+        if (this.sampleRows > 0 && this.sampleRows < 100) {
+            source = source.filter(new SampleRoundRobin<>(this.sampleRows));
         }
+
+        // NB: We don't do column sampling because we omitted respective columns already in the unary IND discovery
+        // process. In consequence, n-ary candidates should not contain any of the excluded columns anyway.
 
         // Transform the CSV data into fields.
         ParseCsvRowsWithOpenCsv parseCsvRows = new ParseCsvRowsWithOpenCsv(
@@ -292,9 +295,7 @@ public abstract class AbstractSindy {
                 this.isIgnoreLeadingWhiteSpace,
                 this.isDropDifferingLines,
                 null,
-                this.maxColumns,
-                this.nullString,
-                this.isDropNulls
+                this.nullString
         );
         final DataSet<IntObjectTuple<String[]>> tuples = source.flatMap(parseCsvRows).name("Parse rows");
         tableDataSets.add(tuples);

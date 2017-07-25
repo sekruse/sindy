@@ -3,13 +3,13 @@ package de.hpi.isg.sindy.udf;
 import au.com.bytecode.opencsv.CSVParser;
 import de.hpi.isg.sindy.data.IntObjectTuple;
 import de.hpi.isg.sindy.util.NullValueCounter;
+import de.hpi.isg.sindy.util.TableHeightAccumulator;
 import de.hpi.isg.sindy.util.TableWidthAccumulator;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
 
-import java.io.IOException;
 import java.util.Objects;
 
 /**
@@ -42,6 +42,7 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
     private final boolean isDropDifferingLines;
 
     private TableWidthAccumulator tableWidthAccumulator;
+    private TableHeightAccumulator tableHeightAccumulator;
     private NullValueCounter nullValueCounter;
 
     /**
@@ -81,6 +82,8 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         this.csvParser = new CSVParser(this.separator, this.quoteChar, this.escapeChar, this.strictQuotes, this.ignoreLeadingWhiteSpace);
         this.tableWidthAccumulator = new TableWidthAccumulator();
         this.getRuntimeContext().addAccumulator(TableWidthAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
+        this.tableHeightAccumulator = new TableHeightAccumulator();
+        this.getRuntimeContext().addAccumulator(TableHeightAccumulator.DEFAULT_KEY, this.tableWidthAccumulator);
         this.nullValueCounter = new NullValueCounter();
         this.getRuntimeContext().addAccumulator(NullValueCounter.DEFAULT_KEY, this.nullValueCounter);
     }
@@ -94,17 +97,20 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         final String row = fileLine.b;
 
         String[] fields;
+        int numFields;
         // Parse and check the correctness.
         try {
             fields = this.csvParser.parseLine(row);
-            this.tableWidthAccumulator.setNumColumns(fileId, fields.length);
+            numFields = (this.maxFields >= 0) ? Math.min(this.maxFields, fields.length) : fields.length;
+            this.tableWidthAccumulator.setNumColumns(fileId, numFields);
         } catch (Exception e) {
             if (this.isDropDifferingLines) return;
             throw new RuntimeException(String.format("Could not parse tuple %s.", fileLine), e);
         }
+
         if (this.numFieldsPerFile != null) {
             int numRequiredFields = this.numFieldsPerFile.get(fileId);
-            if (fields.length != numRequiredFields) {
+            if (fields.length != numRequiredFields) { // We explicitly do not use numFields, because we are interested in the file integrity.
                 if (this.isDropDifferingLines) return;
                 throw new RuntimeException(String.format(
                         "Illegal number of fields in %s (expected %d, found %d).", fileLine, numRequiredFields, fields.length
@@ -112,9 +118,11 @@ public class SplitCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
             }
         }
 
+        // At this point, we have a valid tuple and count it.
+        this.tableHeightAccumulator.add(fileId);
+
         // Forward the parsed values.
-        int numFieldsToRead = (this.maxFields >= 0) ? this.maxFields : fields.length;
-        for (int fieldIndex = 0; fieldIndex < numFieldsToRead; fieldIndex++) {
+        for (int fieldIndex = 0; fieldIndex < numFields; fieldIndex++) {
             String field = fields[fieldIndex];
             if (Objects.equals(field, this.nullString)) {
                 if (this.isSupressingEmptyCells) {

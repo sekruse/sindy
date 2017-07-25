@@ -32,10 +32,6 @@ public class ParseCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
 
     private final Int2IntMap numFieldsPerFile;
 
-    private final int maxFields;
-
-    private final boolean isSupressingEmptyCells;
-
     // CSV parser settings
     private final char quoteChar;
     private final char escapeChar;
@@ -54,15 +50,11 @@ public class ParseCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
      * @param strictQuotes            ignore characters outside of quotes
      * @param ignoreLeadingWhiteSpace ignore leading white space when quotes are present
      * @param isDropDifferingLines    whether differing or unparsable lines should simply be ignored
-     * @param isSupressingEmptyCells  tells whether null fields will be forwarded by this operator or surpressed
      * @param nullString              the {@link String} representation of null values or {@code null} if none
-     * @param maxColumns              is the maximum number of fields to extract from each line (the checkings still apply, though; always the
-     *                                first fields will be taken)
      * @param numFieldsPerFile        is a mapping of file IDs to the number of expected fields contained within each row of the respective file
      */
     public ParseCsvRowsWithOpenCsv(char separator, char quoteChar, char escapeChar, boolean strictQuotes, boolean ignoreLeadingWhiteSpace,
-                                   boolean isDropDifferingLines, final Int2IntMap numFieldsPerFile, final int maxColumns, final String nullString,
-                                   boolean isSupressingEmptyCells) {
+                                   boolean isDropDifferingLines, final Int2IntMap numFieldsPerFile, final String nullString) {
         this.separator = separator;
         this.quoteChar = quoteChar;
         this.escapeChar = escapeChar;
@@ -70,9 +62,7 @@ public class ParseCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         this.ignoreLeadingWhiteSpace = ignoreLeadingWhiteSpace;
         this.isDropDifferingLines = isDropDifferingLines;
         this.numFieldsPerFile = numFieldsPerFile;
-        this.maxFields = maxColumns;
         this.nullString = nullString;
-        this.isSupressingEmptyCells = isSupressingEmptyCells && this.nullString != null;
 
     }
 
