@@ -23,6 +23,6 @@ public class TableHeightAccumulator extends LongCounter {
 
     @Override
     public Accumulator<Integer, Int2LongOpenHashMap> clone() {
-        return new TableHeightAccumulator(this.counts);
+        return new TableHeightAccumulator(this.counts.clone());
     }
 }

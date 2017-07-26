@@ -61,6 +61,6 @@ public class LongCounter implements Accumulator<Integer, Int2LongOpenHashMap> {
 
     @Override
     public Accumulator<Integer, Int2LongOpenHashMap> clone() {
-        return new LongCounter(this.counts);
+        return new LongCounter(new Int2LongOpenHashMap(this.counts));
     }
 }

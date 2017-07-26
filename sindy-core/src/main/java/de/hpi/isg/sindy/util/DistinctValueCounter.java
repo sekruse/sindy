@@ -23,6 +23,6 @@ public class DistinctValueCounter extends LongCounter {
 
     @Override
     public Accumulator<Integer, Int2LongOpenHashMap> clone() {
-        return new DistinctValueCounter(this.counts);
+        return new DistinctValueCounter(this.counts.clone());
     }
 }

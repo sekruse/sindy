@@ -10,7 +10,6 @@ import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.udf.*;
 import de.hpi.isg.sindy.util.*;
 import it.unimi.dsi.fastutil.ints.*;
-import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.commons.lang3.Validate;
@@ -627,13 +626,19 @@ public abstract class AbstractSindy {
             Int2IntMap tableWidths = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
             Int2LongOpenHashMap tableHeights = result.getAccumulatorResult(TableHeightAccumulator.DEFAULT_KEY);
             if (tableWidths != null && tableHeights != null) {
-                int numColumns = 0;
                 long numTuples = 0L;
-                for (IntIterator iter = tableWidths.values().iterator(); iter.hasNext(); ) {
-                    numColumns += iter.nextInt();
+                for (Int2LongMap.Entry entry : tableHeights.int2LongEntrySet()) {
+                    String inputFile = this.inputFiles.get(entry.getIntKey() | this.columnBitMask);
+                    long numLoadedTuples = entry.getLongValue();
+                    this.logger.info(String.format("Loaded %,d tuples from %s.", numLoadedTuples, inputFile));
+                    numTuples += numLoadedTuples;
                 }
-                for (LongIterator iter = tableHeights.values().iterator(); iter.hasNext(); ) {
-                    numTuples += iter.nextLong();
+                int numColumns = 0;
+                for (Int2IntMap.Entry entry : tableWidths.int2IntEntrySet()) {
+                    String inputFile = this.inputFiles.get(entry.getIntKey() | this.columnBitMask);
+                    int numLoadedColumns = entry.getIntValue();
+                    this.logger.info(String.format("Loaded %,d columns in %s.", numLoadedColumns, inputFile));
+                    numColumns += numLoadedColumns;
                 }
                 DatasetMeasurement datasetMeasurement = new DatasetMeasurement("dataset");
                 datasetMeasurement.setNumColumns(numColumns);

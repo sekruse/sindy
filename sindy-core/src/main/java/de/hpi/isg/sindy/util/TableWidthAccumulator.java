@@ -67,6 +67,6 @@ public class TableWidthAccumulator implements Accumulator<IntObjectTuple<Integer
 
     @Override
     public Accumulator<IntObjectTuple<Integer>, Int2IntOpenHashMap> clone() {
-        return new TableWidthAccumulator(this.numColumnsByTableId);
+        return new TableWidthAccumulator(this.numColumnsByTableId.clone());
     }
 }
