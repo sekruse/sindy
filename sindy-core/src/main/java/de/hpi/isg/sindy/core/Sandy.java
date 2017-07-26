@@ -84,10 +84,8 @@ public class Sandy extends AbstractSindy implements Runnable {
             this.maxArity = 1;
         }
 
-        if (this.maxArity > 1) {
-            if (this.naryIndRestrictions == null || this.candidateGenerator == null) {
-                throw new IllegalStateException("No n-ary IND restrictions and/or candidate generator set up.");
-            }
+        if (this.maxArity != 1) {
+            throw new IllegalStateException("Currently, only unary partial IND discovery is supported.");
         }
 
         this.numDiscoveredInds = 0;

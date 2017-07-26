@@ -3,10 +3,8 @@ package de.hpi.isg.sindy.metanome;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.util.MetanomeIndAlgorithm;
-import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
 import de.metanome.algorithm_integration.AlgorithmExecutionException;
-import de.metanome.algorithm_integration.configuration.ConfigurationSettingFileInput;
 import de.metanome.algorithm_integration.results.InclusionDependency;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import org.apache.flink.api.java.ExecutionEnvironment;
@@ -32,6 +30,7 @@ public class SINDY extends MetanomeIndAlgorithm {
         // Configure Sindy.
         Sindy sindy = new Sindy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
+        this.applyBasicConfiguration(sindy);
         switch (this.candidateGenerator) {
             case "mind":
             case "apriori":
@@ -43,27 +42,6 @@ public class SINDY extends MetanomeIndAlgorithm {
             default:
                 throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
         }
-        sindy.setMaxArity(this.maxArity);
-        ConfigurationSettingFileInput setting = this.getConfigurationSettingFileInput();
-        sindy.setFieldSeparator(setting.getSeparatorAsChar());
-        sindy.setQuoteChar(setting.getQuoteCharAsChar());
-        sindy.setEscapeChar(setting.getEscapeCharAsChar());
-        sindy.setNullString(setting.getNullValue());
-        sindy.setDropDifferingLines(setting.isSkipDifferingLines());
-        sindy.setIgnoreLeadingWhiteSpace(setting.isIgnoreLeadingWhiteSpace());
-        sindy.setUseStrictQuotes(setting.isStrictQuotes());
-        sindy.setDropNulls(this.isDropNulls);
-        sindy.setSampleRows(this.sampleRows);
-        sindy.setMaxColumns(this.maxColumns);
-        sindy.setNotUseGroupOperators(this.isNotUseGroupOperators);
-        sindy.setOnlyCountInds(false);
-        for (NaryIndRestrictions indRestrictions : NaryIndRestrictions.values()) {
-            if (this.naryIndRestrictions.equalsIgnoreCase(indRestrictions.name())) {
-                sindy.setNaryIndRestrictions(indRestrictions);
-                break;
-            }
-        }
-        sindy.setExperiment(this.experiment);
 
         // Run Sindy.
         sindy.run();

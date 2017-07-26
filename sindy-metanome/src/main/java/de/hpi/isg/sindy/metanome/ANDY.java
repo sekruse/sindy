@@ -3,15 +3,11 @@ package de.hpi.isg.sindy.metanome;
 import de.hpi.isg.sindy.core.Andy;
 import de.hpi.isg.sindy.metanome.util.MetanomeIndAlgorithm;
 import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
-import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
-import de.metanome.algorithm_integration.configuration.ConfigurationSettingFileInput;
-import de.metanome.algorithm_integration.input.RelationalInputGenerator;
+import de.metanome.algorithm_integration.AlgorithmExecutionException;
 import de.metanome.algorithm_integration.result_receiver.ColumnNameMismatchException;
 import de.metanome.algorithm_integration.result_receiver.CouldNotReceiveResultException;
 import de.metanome.algorithm_integration.results.InclusionDependency;
-import de.metanome.backend.input.file.DefaultFileInputGenerator;
-import de.metanome.cli.HdfsInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import org.apache.flink.api.java.ExecutionEnvironment;
 
@@ -21,45 +17,14 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 public class ANDY extends MetanomeIndAlgorithm {
 
     @Override
-    protected void execute(Int2ObjectMap<Table> indexedInputTables, Int2ObjectMap<String> indexedInputFiles, ExecutionEnvironment executionEnvironment) throws CouldNotReceiveResultException, ColumnNameMismatchException {
+    protected void execute(Int2ObjectMap<Table> indexedInputTables,
+                           Int2ObjectMap<String> indexedInputFiles,
+                           ExecutionEnvironment executionEnvironment)
+            throws AlgorithmExecutionException {
         // Configure Andy.
         Andy andy = new Andy(indexedInputFiles, this.numColumnBits, executionEnvironment, ind -> {
         });
-        andy.setMaxArity(this.maxArity);
-        if (!this.inputGenerators.isEmpty()) {
-            RelationalInputGenerator inputGenerator = this.inputGenerators.get(0);
-            ConfigurationSettingFileInput fileInputSettings = null;
-            if (inputGenerator instanceof DefaultFileInputGenerator) {
-                fileInputSettings = ((DefaultFileInputGenerator) inputGenerator).getSetting();
-            } else if (inputGenerator instanceof HdfsInputGenerator) {
-                fileInputSettings = ((HdfsInputGenerator) inputGenerator).getSettings();
-            }
-
-            if (fileInputSettings != null) {
-                andy.setFieldSeparator(fileInputSettings.getSeparatorAsChar());
-                andy.setQuoteChar(fileInputSettings.getQuoteCharAsChar());
-                andy.setEscapeChar(fileInputSettings.getEscapeCharAsChar());
-                andy.setNullString(fileInputSettings.getNullValue());
-                andy.setDropDifferingLines(fileInputSettings.isSkipDifferingLines());
-                andy.setIgnoreLeadingWhiteSpace(fileInputSettings.isIgnoreLeadingWhiteSpace());
-                andy.setUseStrictQuotes(fileInputSettings.isStrictQuotes());
-            } else {
-                System.err.println("Could not read CSV settings from Metanome configuration.");
-            }
-        }
-
-        andy.setDropNulls(this.isDropNulls);
-        andy.setSampleRows(this.sampleRows);
-        andy.setMaxColumns(this.maxColumns);
-        andy.setNotUseGroupOperators(this.isNotUseGroupOperators);
-        andy.setOnlyCountInds(false);
-        for (NaryIndRestrictions indRestrictions : NaryIndRestrictions.values()) {
-            if (this.naryIndRestrictions.equalsIgnoreCase(indRestrictions.name())) {
-                andy.setNaryIndRestrictions(indRestrictions);
-                break;
-            }
-        }
-        andy.setExperiment(this.experiment);
+        this.applyBasicConfiguration(andy);
 
         // Run Andy.
         andy.run();

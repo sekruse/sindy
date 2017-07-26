@@ -321,6 +321,36 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
     }
 
     /**
+     * Apply the configuration values defined in the {@link MetanomeIndAlgorithm} class to an {@link AbstractSindy} algorithm.
+     *
+     * @param algorithm the algorithm
+     * @throws AlgorithmConfigurationException if the configuration failed
+     */
+    protected void applyBasicConfiguration(AbstractSindy algorithm) throws AlgorithmConfigurationException {
+        ConfigurationSettingFileInput setting = this.getConfigurationSettingFileInput();
+        algorithm.setFieldSeparator(setting.getSeparatorAsChar());
+        algorithm.setQuoteChar(setting.getQuoteCharAsChar());
+        algorithm.setEscapeChar(setting.getEscapeCharAsChar());
+        algorithm.setNullString(setting.getNullValue());
+        algorithm.setDropDifferingLines(setting.isSkipDifferingLines());
+        algorithm.setIgnoreLeadingWhiteSpace(setting.isIgnoreLeadingWhiteSpace());
+        algorithm.setUseStrictQuotes(setting.isStrictQuotes());
+        algorithm.setDropNulls(this.isDropNulls);
+        algorithm.setSampleRows(this.sampleRows);
+        algorithm.setMaxColumns(this.maxColumns);
+        algorithm.setNotUseGroupOperators(this.isNotUseGroupOperators);
+        algorithm.setOnlyCountInds(false);
+        algorithm.setMaxArity(this.maxArity);
+        for (NaryIndRestrictions indRestrictions : NaryIndRestrictions.values()) {
+            if (this.naryIndRestrictions.equalsIgnoreCase(indRestrictions.name())) {
+                algorithm.setNaryIndRestrictions(indRestrictions);
+                break;
+            }
+        }
+        algorithm.setExperiment(this.experiment);
+    }
+
+    /**
      * Describes a table that is being profiled.
      */
     protected static final class Table {
