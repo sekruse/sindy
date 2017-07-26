@@ -1,5 +1,6 @@
 package de.hpi.isg.sindy.core;
 
+import de.hpi.isg.profiledb.instrumentation.StopWatch;
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
 import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
@@ -95,12 +96,16 @@ public class Andy extends AbstractSindy implements Runnable {
     }
 
     protected void executeRun() throws Exception {
+        StopWatch stopWatch = this.experiment == null ? null : new StopWatch(this.experiment);
+
         // Take care of the unary IND detection.
+        if (stopWatch != null) stopWatch.start("arity-1", "validation");
         DataSet<Tuple2<Integer, int[]>> unaryInds = this.buildUnaryIndDetectionPlan(this.inputFiles.keySet()).project(0, 2);
         if (this.isOnlyCountInds) {
             int numInds = this.count(unaryInds);
             this.numDiscoveredInds = numInds;
             this.logger.info("Discovered {} unary INDs.", numInds);
+            if (stopWatch != null) stopWatch.stop("arity-1");
             return;
         }
 
@@ -176,7 +181,7 @@ public class Andy extends AbstractSindy implements Runnable {
                 iter.remove();
             }
         }
-
+        if (stopWatch != null) stopWatch.stop("arity-1");
 
         // Now perform n-ary IND detection using the Apriori candidate generation.
         this.allInds = this.newInds;
@@ -194,10 +199,15 @@ public class Andy extends AbstractSindy implements Runnable {
             }
 
             // Generate n-ary IND candidates.
+            if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "candidate-generation");
             final Set<IND> indCandidates = this.generateCandidates(this.newInds, distinctValueCountsByArity.get(newArity - 2));
+            if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "candidate-generation");
             if (indCandidates.isEmpty()) {
+                if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity));
                 break;
             }
+
+            if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "validation");
 
             // For any column combination in the n-ary IND candidates, create an ID.
             final Object2IntMap<IntList> columnCombinationIds = this.createIdsForColumnCombinations2(indCandidates);
@@ -283,10 +293,13 @@ public class Andy extends AbstractSindy implements Runnable {
                 }
                 if (isIarEmbedded) iter.remove();
             }
+            if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "validation");
 
             // Consolidate the newly discovered INDs with the existing INDs.
+            if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "consolidation");
             this.candidateGenerator.consolidate(this.allInds, this.newInds);
             this.allInds.addAll(this.newInds);
+            if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity));
 
             // Prepare for the next iteration.
             newArity++;
