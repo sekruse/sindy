@@ -7,6 +7,7 @@ import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
 import de.hpi.isg.sindy.searchspace.CandidateGenerator;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
+import de.hpi.isg.sindy.searchspace.SindyCandidateGenerator;
 import de.hpi.isg.sindy.udf.*;
 import de.hpi.isg.sindy.util.*;
 import it.unimi.dsi.fastutil.ints.*;
@@ -88,7 +89,7 @@ public abstract class AbstractSindy {
     /**
      * {@link CandidateGenerator} for n-ary IND discovery.
      */
-    protected CandidateGenerator candidateGenerator = new AprioriCandidateGenerator();
+    protected SindyCandidateGenerator candidateGenerator = new AprioriCandidateGenerator();
     /**
      * Whether to exclude void {@link IND}s where the dependent side does not contain any values from candidate generation.
      * <p>By default {@code false} because it impairs the result completeness when the user is not aware of this restriction.</p>
@@ -648,6 +649,33 @@ public abstract class AbstractSindy {
         }
     }
 
+    /**
+     * Update the {@link #experiment} with data about the number of {@link IND}s and candidates of a specific arity.
+     *
+     * @param arity         the arity of the {@link IND}s
+     * @param numCandidates the number of {@link IND} candidates of the given {@code arity}
+     * @param numInds       the number of {@link IND}s of the given {@code arity}
+     */
+    protected void updateExperimentWithIndStats(int arity, int numCandidates, int numInds) {
+        this.logger.info("IND stats for arity {}: {} INDs from {} candidates.",
+                arity, String.format("%,d", numInds), String.format("%,d", numCandidates)
+        );
+        if (this.experiment != null) {
+            IndMeasurement indMeasurement = (IndMeasurement) this.experiment.getMeasurements().stream()
+                    .filter(m -> m.getId().equals("ind-stats"))
+                    .findFirst()
+                    .orElseGet(
+                            () -> {
+                                IndMeasurement measurement = new IndMeasurement("ind-stats");
+                                this.experiment.addMeasurement(measurement);
+                                return measurement;
+                            }
+                    );
+            indMeasurement.add(arity, numCandidates, numInds);
+        }
+    }
+
+
     public Int2ObjectMap<String> getInputFiles() {
         return this.inputFiles;
     }
@@ -700,11 +728,11 @@ public abstract class AbstractSindy {
         this.maxArity = maxArity;
     }
 
-    public CandidateGenerator getCandidateGenerator() {
+    public SindyCandidateGenerator getCandidateGenerator() {
         return this.candidateGenerator;
     }
 
-    public void setCandidateGenerator(CandidateGenerator candidateGenerator) {
+    public void setCandidateGenerator(SindyCandidateGenerator candidateGenerator) {
         this.candidateGenerator = candidateGenerator;
     }
 
@@ -823,34 +851,34 @@ public abstract class AbstractSindy {
         this.experiment = experiment;
     }
 
-    @SuppressWarnings("serial")
-    static class CountInds implements MapFunction<Tuple2<Integer, int[]>, Tuple1<Integer>> {
+@SuppressWarnings("serial")
+static class CountInds implements MapFunction<Tuple2<Integer, int[]>, Tuple1<Integer>> {
 
-        private final Tuple1<Integer> outputTuple = new Tuple1<>();
+    private final Tuple1<Integer> outputTuple = new Tuple1<>();
 
-        @Override
-        public Tuple1<Integer> map(Tuple2<Integer, int[]> indList) throws Exception {
-            this.outputTuple.f0 = indList.f1.length;
-            return this.outputTuple;
-        }
-
+    @Override
+    public Tuple1<Integer> map(Tuple2<Integer, int[]> indList) throws Exception {
+        this.outputTuple.f0 = indList.f1.length;
+        return this.outputTuple;
     }
+
+}
+
+/**
+ * Factory to create an add-command for certain elements.
+ *
+ * @param <T> is the type of the elements to be added
+ */
+public interface AddCommandFactory<T> {
 
     /**
-     * Factory to create an add-command for certain elements.
+     * Create the add-command.
      *
-     * @param <T> is the type of the elements to be added
+     * @param element for that the add-command should be created
+     * @return the add-command
      */
-    public interface AddCommandFactory<T> {
+    Runnable create(T element);
 
-        /**
-         * Create the add-command.
-         *
-         * @param element for that the add-command should be created
-         * @return the add-command
-         */
-        Runnable create(T element);
-
-    }
+}
 
 }

@@ -1,8 +1,10 @@
 package de.hpi.isg.sindy.util;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import scala.Int;
 
 import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * Simple implementation of an inclusion dependency via column IDs.
@@ -13,6 +15,34 @@ public class IND {
      * An instance without any columns.
      */
     public static final IND emptyInstance = new IND(new int[0], new int[0]);
+
+    /**
+     * Standard {@link Comparator} for {@link IND}s that orders by
+     * <ol>
+     *     <li>arity,</li>
+     *     <li>dependent column IDs (lexicographically), and</li>
+     *     <li>referenced column IDs (lexicographically)</li>
+     * </ol>
+     * in that order.
+     */
+    public static final Comparator<IND> standardComparator = (ind1, ind2) -> {
+        if (ind1 == ind2) return 0;
+
+        int result = Integer.compare(ind1.getArity(), ind2.getArity());
+        if (result != 0) return result;
+
+        int arity = ind1.getArity();
+        for (int i = 0; i < arity; i++) {
+            result = Integer.compare(ind1.dependentColumns[i], ind2.dependentColumns[i]);
+            if (result != 0) return result;
+        }
+        for (int i = 0; i < arity; i++) {
+            result = Integer.compare(ind1.referencedColumns[i], ind2.referencedColumns[i]);
+            if (result != 0) return result;
+        }
+
+        return 0;
+    };
 
     /**
      * IDs of the dependent and reference columns of this instance.

@@ -4,7 +4,8 @@ import de.hpi.isg.sindy.util.IND;
 import de.hpi.isg.sindy.util.INDs;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import it.unimi.dsi.fastutil.ints.IntSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -13,14 +14,46 @@ import java.util.function.Predicate;
  * Generates {@link IND} candidates in an Apriori manner (as described for the MIND algorithm).
  * In addition,
  */
-public class AprioriCandidateGenerator implements CandidateGenerator {
+public class AprioriCandidateGenerator implements CandidateGenerator, SindyCandidateGenerator {
+
+    /**
+     * Logger.
+     */
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
+    @Override
+    public void generate(Collection<IND> newInds,
+                         Collection<IND> consolidatedInds,
+                         int nextArity,
+                         NaryIndRestrictions naryIndRestrictions,
+                         boolean isExcludeVoidIndsFromCandidateGeneration,
+                         Predicate<int[]> emptyColumnTest,
+                         int columnBitMask,
+                         Collection<IND> collector) {
+
+        Map<IndSubspaceKey, SortedSet<IND>> groupedInds = INDs.groupIntoSubspaces(newInds, columnBitMask);
+        for (Map.Entry<IndSubspaceKey, SortedSet<IND>> entry : groupedInds.entrySet()) {
+            int oldIndCandidatesSize = collector.size();
+            this.generate(
+                    entry.getValue(), entry.getKey(),
+                    naryIndRestrictions,
+                    isExcludeVoidIndsFromCandidateGeneration ?
+                            ind -> !emptyColumnTest.test(ind.getDependentColumns()) :
+                            null,
+                    nextArity,
+                    collector
+            );
+            this.logger.debug("Generated {} candidates for {}.", collector.size() - oldIndCandidatesSize, entry.getKey());
+        }
+
+    }
 
     @Override
     public void generate(Collection<IND> inds,
                          IndSubspaceKey indSubspaceKey,
                          NaryIndRestrictions naryIndRestrictions,
                          Predicate<IND> inputPredicate,
-                         int maxArity,
+                         int nextArity,
                          Collection<IND> candidates) {
 
         // Put all INDs into a prefix map.
@@ -30,7 +63,7 @@ public class AprioriCandidateGenerator implements CandidateGenerator {
             // Test whether the IND may be used for candidate generation.
             if (inputPredicate != null && !inputPredicate.test(ind)) continue;
 
-            if (ind.getArity() < maxArity || maxArity == -1) {
+            if (ind.getArity() == nextArity - 1) {
                 IntList prefix = this.extractAprioriPrefix(ind);
                 List<IND> prefixGroup = prefixMap.computeIfAbsent(prefix, k -> new ArrayList<>());
                 prefixGroup.add(ind);
@@ -86,7 +119,7 @@ public class AprioriCandidateGenerator implements CandidateGenerator {
                     IND candidate = new IND(newDep, newRef);
 
                     // Check that all generating INDs really exist.
-                    boolean areAllGeneratingIndsExisting = true;
+                    boolean areAllGeneratingIndsValid = true;
                     if (prefixPerSideSize > 0) {
                         List<IND> generatingInds = new LinkedList<>();
                         INDs.generateImpliedInds(candidate, prefixPerSideSize + 1, generatingInds);
@@ -98,12 +131,17 @@ public class AprioriCandidateGenerator implements CandidateGenerator {
                             IND generatingInd = iterator.next();
                             // It might be when we allow to embed trivial INDs (e.g., R[ABB] < R[ABC])
                             if (!(isAllowTrivialInds && generatingInd.isTrivial()) && !inds.contains(generatingInd)) {
-                                areAllGeneratingIndsExisting = false;
+                                areAllGeneratingIndsValid = false;
+                                break;
+                            }
+                            // Make sure that the input predicate holds for all generating INDs.
+                            if (inputPredicate != null && !inputPredicate.test(generatingInd)) {
+                                areAllGeneratingIndsValid = false;
                                 break;
                             }
                         }
                     }
-                    if (areAllGeneratingIndsExisting) {
+                    if (areAllGeneratingIndsValid) {
                         candidates.add(candidate);
                     }
                 }

@@ -185,6 +185,7 @@ public class Sindy extends AbstractSindy implements Runnable {
                 }
             }
             this.updateExperimentWithDatasetSize(result);
+            this.updateExperimentWithIndStats(1, allColumnIds.size() * (allColumnIds.size() - 1), this.newInds.size());
         }
         if (stopWatch != null) stopWatch.stop("arity-1");
 
@@ -205,7 +206,7 @@ public class Sindy extends AbstractSindy implements Runnable {
 
             // Generate n-ary IND candidates.
             if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "candidate-generation");
-            final Set<IND> indCandidates = this.generateCandidates(this.newInds);
+            final Set<IND> indCandidates = this.generateCandidates(newArity);
             if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "candidate-generation");
             if (indCandidates.isEmpty()) {
                 if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity));
@@ -233,6 +234,8 @@ public class Sindy extends AbstractSindy implements Runnable {
                             };
             String jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
             this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+            this.updateExperimentWithIndStats(newArity, indCandidates.size(), this.newInds.size());
+
 
             // Detect empty columns and add appropriate INDs.
             // Index the INDs by their dependent columns.
@@ -299,24 +302,22 @@ public class Sindy extends AbstractSindy implements Runnable {
     /**
      * Generates n-ary {@link IND} candidates based on a set of known {@link IND}.
      *
-     * @param knownInds {@link IND}s that have been found since the last candidate generation (TODO: revise?)
+     * @param newArity the arity of the {@link IND} candidates to be generated
      * @return the generated {@link IND} candidates
      */
-    private Set<IND> generateCandidates(Collection<IND> knownInds) {
-        Map<IndSubspaceKey, SortedSet<IND>> groupedInds = INDs.groupIntoSubspaces(knownInds, this.columnBitMask);
-        final Set<IND> indCandidates = new HashSet<>();
-        for (Map.Entry<IndSubspaceKey, SortedSet<IND>> entry : groupedInds.entrySet()) {
-            int oldIndCandidatesSize = indCandidates.size();
+    private Set<IND> generateCandidates(int newArity) {
+        Set<IND> indCandidates = new HashSet<>();
+        if (newArity <= this.maxBfsArity || this.maxBfsArity == -1) {
             this.candidateGenerator.generate(
-                    entry.getValue(), entry.getKey(),
+                    this.newInds,
+                    this.allInds,
+                    newArity,
                     this.naryIndRestrictions,
-                    this.isExcludeVoidIndsFromCandidateGeneration ?
-                            ind -> ind.getArity() == 1 && !this.emptyColumnIds.contains(ind.getDependentColumns()[0]) :
-                            null,
-                    this.maxArity,
+                    this.isExcludeVoidIndsFromCandidateGeneration,
+                    columns -> columns.length == 1 && this.emptyColumnIds.contains(columns[0]),
+                    this.columnBitMask,
                     indCandidates
             );
-            this.logger.debug("Generated {} candidates for {}.", indCandidates.size() - oldIndCandidatesSize, entry.getKey());
         }
         this.logger.info("Generated {} IND candidates.", indCandidates.size());
         if (this.logger.isDebugEnabled()) {

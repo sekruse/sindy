@@ -3,6 +3,8 @@ package de.hpi.isg.sindy.metanome;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.metanome.properties.MetanomeProperty;
 import de.hpi.isg.sindy.metanome.util.MetanomeIndAlgorithm;
+import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
+import de.hpi.isg.sindy.searchspace.BinderCandidateGenerator;
 import de.hpi.isg.sindy.util.IND;
 import de.metanome.algorithm_integration.AlgorithmExecutionException;
 import de.metanome.algorithm_integration.results.InclusionDependency;
@@ -35,9 +37,16 @@ public class SINDY extends MetanomeIndAlgorithm {
             case "mind":
             case "apriori":
                 sindy.setExcludeVoidIndsFromCandidateGeneration(false);
+                sindy.setCandidateGenerator(new AprioriCandidateGenerator());
+                break;
+            case "apriori-no-void":
+            case "mind-no-void":
+                sindy.setExcludeVoidIndsFromCandidateGeneration(true);
+                sindy.setCandidateGenerator(new AprioriCandidateGenerator());
                 break;
             case "binder":
                 sindy.setExcludeVoidIndsFromCandidateGeneration(true);
+                sindy.setCandidateGenerator(new BinderCandidateGenerator());
                 break;
             default:
                 throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));

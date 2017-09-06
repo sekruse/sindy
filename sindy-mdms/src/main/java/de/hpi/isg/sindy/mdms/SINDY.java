@@ -17,6 +17,7 @@ import de.hpi.isg.mdms.model.targets.Schema;
 import de.hpi.isg.mdms.model.targets.Table;
 import de.hpi.isg.sindy.core.Sindy;
 import de.hpi.isg.sindy.searchspace.AprioriCandidateGenerator;
+import de.hpi.isg.sindy.searchspace.BinderCandidateGenerator;
 import de.hpi.isg.sindy.searchspace.CandidateGenerator;
 import de.hpi.isg.sindy.searchspace.NaryIndRestrictions;
 import de.hpi.isg.sindy.util.IND;
@@ -202,17 +203,20 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
 
         public void configureCandidateGenerator(Sindy sindy) {
             switch (this.candidateGenerator) {
-                case "apriori":
                 case "mind":
+                case "apriori":
                     sindy.setExcludeVoidIndsFromCandidateGeneration(false);
+                    sindy.setCandidateGenerator(new AprioriCandidateGenerator());
+                    break;
+                case "apriori-no-void":
+                case "mind-no-void":
+                    sindy.setExcludeVoidIndsFromCandidateGeneration(true);
+                    sindy.setCandidateGenerator(new AprioriCandidateGenerator());
                     break;
                 case "binder":
                     sindy.setExcludeVoidIndsFromCandidateGeneration(true);
+                    sindy.setCandidateGenerator(new BinderCandidateGenerator());
                     break;
-                default:
-                    throw new IllegalArgumentException(String.format(
-                            "Unknown candidate generator strategy: \"%s\".", this.candidateGenerator
-                    ));
             }
         }
 

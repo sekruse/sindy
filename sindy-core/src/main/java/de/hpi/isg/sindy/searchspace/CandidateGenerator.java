@@ -2,7 +2,6 @@ package de.hpi.isg.sindy.searchspace;
 
 
 import de.hpi.isg.sindy.util.IND;
-import it.unimi.dsi.fastutil.ints.IntSet;
 
 import java.util.Collection;
 import java.util.LinkedList;
@@ -12,7 +11,6 @@ import java.util.function.Predicate;
  * Generates {@link IND} candidates based on given {@link IND}s by some strategy.
  */
 public interface CandidateGenerator {
-
 
     /**
      * Generates {@link IND} candidates.

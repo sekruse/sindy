@@ -166,6 +166,8 @@ public class Andy extends AbstractSindy implements Runnable {
                 }
             }
         }
+        this.updateExperimentWithIndStats(1, allColumnIds.size() * (allColumnIds.size() - 1), this.newInds.size());
+
 
         // Go over the INDs to find 0-ary ARs. Promote all other INDs.
         for (Iterator<IND> iter = this.newInds.iterator(); iter.hasNext(); ) {
@@ -200,7 +202,7 @@ public class Andy extends AbstractSindy implements Runnable {
 
             // Generate n-ary IND candidates.
             if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "candidate-generation");
-            final Set<IND> indCandidates = this.generateCandidates(this.newInds, distinctValueCountsByArity.get(newArity - 2));
+            final Set<IND> indCandidates = this.generateCandidates(this.newInds, distinctValueCountsByArity.get(newArity - 2), newArity);
             if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "candidate-generation");
             if (indCandidates.isEmpty()) {
                 if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity));
@@ -346,21 +348,19 @@ public class Andy extends AbstractSindy implements Runnable {
      * @param knownInds {@link IND}s that have been found since the last candidate generation (TODO: revise?)
      * @return the generated {@link IND} candidates
      */
-    private Set<IND> generateCandidates(Collection<IND> knownInds, Object2LongMap<IntList> distinctValueCounts) {
-        Map<IndSubspaceKey, SortedSet<IND>> groupedInds = INDs.groupIntoSubspaces(knownInds, this.columnBitMask);
-        final Set<IND> indCandidates = new HashSet<>();
-        for (Map.Entry<IndSubspaceKey, SortedSet<IND>> entry : groupedInds.entrySet()) {
-            int oldIndCandidatesSize = indCandidates.size();
+    private Set<IND> generateCandidates(Collection<IND> knownInds, Object2LongMap<IntList> distinctValueCounts, int newArity) {
+        Set<IND> indCandidates = new HashSet<>();
+        if (newArity <= this.maxArity) {
             this.candidateGenerator.generate(
-                    entry.getValue(), entry.getKey(),
+                    this.newInds,
+                    this.allInds,
+                    newArity,
                     this.naryIndRestrictions,
-                    this.isExcludeVoidIndsFromCandidateGeneration ?
-                            ind -> distinctValueCounts.getLong(toSortedIntList(ind.getDependentColumns())) > 0L :
-                            null,
-                    this.maxArity,
+                    this.isExcludeVoidIndsFromCandidateGeneration,
+                    columns -> distinctValueCounts.getLong(toSortedIntList(columns)) > 0L,
+                    this.columnBitMask,
                     indCandidates
             );
-            this.logger.debug("Generated {} candidates for {}.", indCandidates.size() - oldIndCandidatesSize, entry.getKey());
         }
         this.logger.info("Generated {} IND candidates.", indCandidates.size());
         if (this.logger.isDebugEnabled()) {
