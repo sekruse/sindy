@@ -851,34 +851,34 @@ public abstract class AbstractSindy {
         this.experiment = experiment;
     }
 
-@SuppressWarnings("serial")
-static class CountInds implements MapFunction<Tuple2<Integer, int[]>, Tuple1<Integer>> {
+    @SuppressWarnings("serial")
+    static class CountInds implements MapFunction<Tuple2<Integer, int[]>, Tuple1<Integer>> {
 
-    private final Tuple1<Integer> outputTuple = new Tuple1<>();
+        private final Tuple1<Integer> outputTuple = new Tuple1<>();
 
-    @Override
-    public Tuple1<Integer> map(Tuple2<Integer, int[]> indList) throws Exception {
-        this.outputTuple.f0 = indList.f1.length;
-        return this.outputTuple;
+        @Override
+        public Tuple1<Integer> map(Tuple2<Integer, int[]> indList) throws Exception {
+            this.outputTuple.f0 = indList.f1.length;
+            return this.outputTuple;
+        }
+
     }
 
-}
-
-/**
- * Factory to create an add-command for certain elements.
- *
- * @param <T> is the type of the elements to be added
- */
-public interface AddCommandFactory<T> {
-
     /**
-     * Create the add-command.
+     * Factory to create an add-command for certain elements.
      *
-     * @param element for that the add-command should be created
-     * @return the add-command
+     * @param <T> is the type of the elements to be added
      */
-    Runnable create(T element);
+    public interface AddCommandFactory<T> {
 
-}
+        /**
+         * Create the add-command.
+         *
+         * @param element for that the add-command should be created
+         * @return the add-command
+         */
+        Runnable create(T element);
+
+    }
 
 }

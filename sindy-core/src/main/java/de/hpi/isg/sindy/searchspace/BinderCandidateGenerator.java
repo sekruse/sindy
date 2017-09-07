@@ -44,12 +44,21 @@ public class BinderCandidateGenerator implements SindyCandidateGenerator {
             int unaryIndIndex = 0;
             for (IND naryInd : naryInds) {
                 // Check if we need to handle the IND in the first place.
+                // NB: This check is not described in the BINDER paper but seems intended.
                 if (isExcludeVoidIndsFromCandidateGeneration && emptyColumnTest.test(naryInd.getDependentColumns())) {
                     continue;
                 }
 
+                // TODO: This does not work when allowing repeated IND candidates.
+                if (naryIndRestrictions.isAllowInterRepetitions()
+                        || naryIndRestrictions.isAllowIntraRepetitions()
+                        || naryIndRestrictions.isAllowTrivialInds()) {
+                    throw new IllegalStateException("BINDER candidate generator does not support edge cases.");
+                }
+
                 // Determine the first unary IND is "greater than" the n-ary IND.
-                while (unaryIndIndex < unaryInds.size() && IND.standardComparator.compare(unaryInds.get(unaryIndIndex), naryInd) <= 0) {
+                while (unaryIndIndex < unaryInds.size()
+                        && unaryInds.get(unaryIndIndex).getDependentColumns()[0] <= naryInd.getDependentColumns()[0]) {
                     unaryIndIndex++;
                 }
                 if (unaryIndIndex >= unaryInds.size()) break;
@@ -60,6 +69,10 @@ public class BinderCandidateGenerator implements SindyCandidateGenerator {
                     IND unaryInd = unaryInds.get(i);
                     int newDep = unaryInd.getDependentColumns()[0];
                     int newRef = unaryInd.getReferencedColumns()[0];
+
+                    for (int j = 0; j < naryInd.getArity(); j++) {
+                        if (newDep <= naryInd.getDependentColumns()[j]) continue IndCombinations;
+                    }
 
                     // Make sure that we do not create an IND with an empty LHS.
                     if (isExcludeVoidIndsFromCandidateGeneration && emptyColumnTest.test(unaryInd.getDependentColumns())) {

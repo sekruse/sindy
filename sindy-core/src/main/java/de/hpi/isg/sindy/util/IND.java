@@ -45,6 +45,37 @@ public class IND {
     };
 
     /**
+     * Lexicographical {@link Comparator} for {@link IND}s that orders by
+     * <ol>
+     *     <li>dependent column IDs (lexicographically), and</li>
+     *     <li>referenced column IDs (lexicographically)</li>
+     * </ol>
+     * in that order. Note that the second comparison criterion can only apply when both {@link IND}s are of the same
+     * arity.
+     */
+    public static final Comparator<IND> lexicographicalComparator = (ind1, ind2) -> {
+        if (ind1 == ind2) return 0;
+
+        // Sort lexicographically by the dep. columns.
+        int result;
+        int minArity = Math.min(ind1.getArity(), ind2.getArity());
+        for (int i = 0; i < minArity; i++) {
+            result = Integer.compare(ind1.dependentColumns[i], ind2.dependentColumns[i]);
+            if (result != 0) return result;
+        }
+        // If the common dep. columns are identical, the "shorter" IND comes first.
+        result = Integer.compare(ind1.getArity(), ind2.getArity());
+        if (result != 0) return result;
+        // Sort lexicographically by the equal-sized ref. columns.
+        for (int i = 0; i < minArity; i++) {
+            result = Integer.compare(ind1.referencedColumns[i], ind2.referencedColumns[i]);
+            if (result != 0) return result;
+        }
+
+        return 0;
+    };
+
+    /**
      * IDs of the dependent and reference columns of this instance.
      */
     protected final int[] dependentColumns, referencedColumns;
