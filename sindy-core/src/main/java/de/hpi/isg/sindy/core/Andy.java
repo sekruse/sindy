@@ -3,7 +3,6 @@ package de.hpi.isg.sindy.core;
 import de.hpi.isg.profiledb.instrumentation.StopWatch;
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
 import de.hpi.isg.sindy.searchspace.IndAugmentationRule;
-import de.hpi.isg.sindy.searchspace.IndSubspaceKey;
 import de.hpi.isg.sindy.util.*;
 import it.unimi.dsi.fastutil.ints.*;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -166,8 +165,6 @@ public class Andy extends AbstractSindy implements Runnable {
                 }
             }
         }
-        this.updateExperimentWithIndStats(1, allColumnIds.size() * (allColumnIds.size() - 1), this.newInds.size());
-
 
         // Go over the INDs to find 0-ary ARs. Promote all other INDs.
         for (Iterator<IND> iter = this.newInds.iterator(); iter.hasNext(); ) {
@@ -183,6 +180,7 @@ public class Andy extends AbstractSindy implements Runnable {
                 iter.remove();
             }
         }
+        this.updateExperimentWithIndStats(1, allColumnIds.size() * (allColumnIds.size() - 1), this.newInds.size(), this.augmentationRules.size());
         if (stopWatch != null) stopWatch.stop("arity-1");
 
         // Now perform n-ary IND detection using the Apriori candidate generation.
@@ -202,7 +200,7 @@ public class Andy extends AbstractSindy implements Runnable {
 
             // Generate n-ary IND candidates.
             if (stopWatch != null) stopWatch.start(String.format("arity-%d", newArity), "candidate-generation");
-            final Set<IND> indCandidates = this.generateCandidates(this.newInds, distinctValueCountsByArity.get(newArity - 2), newArity);
+            final Set<IND> indCandidates = this.generateCandidates(distinctValueCountsByArity.get(newArity - 2), newArity);
             if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "candidate-generation");
             if (indCandidates.isEmpty()) {
                 if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity));
@@ -251,8 +249,8 @@ public class Andy extends AbstractSindy implements Runnable {
             }
             distinctValueCountsByArity.add(newArity - 1, distinctValueCounts);
 
-
             // Go over the INDs, determine column combination metadata, and determine IND ARs.
+            int numPrevArs = this.augmentationRules.size();
             Object2LongMap<IntList> prevDistinctValueCounts = distinctValueCountsByArity.get(newArity - 2);
             Object2LongMap<IntList> curDistinctValueCounts = distinctValueCountsByArity.get(newArity - 1);
             Object2LongMap<IntList> prevNullValueCounts = nullValueCountsByArity.get(newArity - 2);
@@ -295,6 +293,7 @@ public class Andy extends AbstractSindy implements Runnable {
                 }
                 if (isIarEmbedded) iter.remove();
             }
+            this.updateExperimentWithIndStats(newArity, indCandidates.size(), this.newInds.size(), this.augmentationRules.size() - numPrevArs);
             if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "validation");
 
             // Consolidate the newly discovered INDs with the existing INDs.
@@ -345,12 +344,11 @@ public class Andy extends AbstractSindy implements Runnable {
     /**
      * Generates n-ary {@link IND} candidates based on a set of known {@link IND}.
      *
-     * @param knownInds {@link IND}s that have been found since the last candidate generation (TODO: revise?)
      * @return the generated {@link IND} candidates
      */
-    private Set<IND> generateCandidates(Collection<IND> knownInds, Object2LongMap<IntList> distinctValueCounts, int newArity) {
+    private Set<IND> generateCandidates(Object2LongMap<IntList> distinctValueCounts, int newArity) {
         Set<IND> indCandidates = new HashSet<>();
-        if (newArity <= this.maxArity) {
+        if (newArity <= this.maxArity || this.maxArity == -1) {
             this.candidateGenerator.generate(
                     this.newInds,
                     this.allInds,

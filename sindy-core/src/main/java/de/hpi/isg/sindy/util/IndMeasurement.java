@@ -19,12 +19,13 @@ public class IndMeasurement extends Measurement {
      */
     public static class Entry {
 
-        private int arity, numInds, numCandidates;
+        private int arity, numInds, numCandidates, numArs;
 
-        public Entry(int arity, int numCandidates, int numInds) {
+        public Entry(int arity, int numCandidates, int numInds, int numArs) {
             this.arity = arity;
             this.numInds = numInds;
             this.numCandidates = numCandidates;
+            this.numArs = numArs;
         }
 
         private Entry() {
@@ -66,9 +67,10 @@ public class IndMeasurement extends Measurement {
      * @param arity         the arity of the {@link IND}s
      * @param numCandidates the number of {@link IND} candidates of the given {@code arity}
      * @param numInds       the number of {@link IND}s of the given {@code arity}
+     * @param numArs        the number of {@link de.hpi.isg.sindy.searchspace.IndAugmentationRule}s of the given {@code arity}
      */
-    public void add(int arity, int numCandidates, int numInds) {
-        this.entries.add(new Entry(arity, numCandidates, numInds));
+    public void add(int arity, int numCandidates, int numInds, int numArs) {
+        this.entries.add(new Entry(arity, numCandidates, numInds, numArs));
     }
 
     /**

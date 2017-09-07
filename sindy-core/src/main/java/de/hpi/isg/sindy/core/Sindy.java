@@ -234,8 +234,6 @@ public class Sindy extends AbstractSindy implements Runnable {
                             };
             String jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
             this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
-            this.updateExperimentWithIndStats(newArity, indCandidates.size(), this.newInds.size());
-
 
             // Detect empty columns and add appropriate INDs.
             // Index the INDs by their dependent columns.
@@ -259,7 +257,7 @@ public class Sindy extends AbstractSindy implements Runnable {
                     }
                 }
             }
-
+            this.updateExperimentWithIndStats(newArity, indCandidates.size(), this.newInds.size());
             if (stopWatch != null) stopWatch.stop(String.format("arity-%d", newArity), "validation");
 
 

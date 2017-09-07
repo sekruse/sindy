@@ -657,6 +657,18 @@ public abstract class AbstractSindy {
      * @param numInds       the number of {@link IND}s of the given {@code arity}
      */
     protected void updateExperimentWithIndStats(int arity, int numCandidates, int numInds) {
+        this.updateExperimentWithIndStats(arity, numCandidates, numInds, 0);
+    }
+
+    /**
+     * Update the {@link #experiment} with data about the number of {@link IND}s and candidates of a specific arity.
+     *
+     * @param arity         the arity of the {@link IND}s
+     * @param numCandidates the number of {@link IND} candidates of the given {@code arity}
+     * @param numInds       the number of {@link IND}s of the given {@code arity}
+     * @param numArs        the number of {@link de.hpi.isg.sindy.searchspace.IndAugmentationRule}s of the given {@code arity}
+     */
+    protected void updateExperimentWithIndStats(int arity, int numCandidates, int numInds, int numArs) {
         this.logger.info("IND stats for arity {}: {} INDs from {} candidates.",
                 arity, String.format("%,d", numInds), String.format("%,d", numCandidates)
         );
@@ -671,7 +683,7 @@ public abstract class AbstractSindy {
                                 return measurement;
                             }
                     );
-            indMeasurement.add(arity, numCandidates, numInds);
+            indMeasurement.add(arity, numCandidates, numInds, numArs);
         }
     }
 
