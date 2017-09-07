@@ -3,8 +3,8 @@ package de.hpi.isg.sindy.udf;
 import de.hpi.isg.sindy.data.IntObjectTuple;
 import de.hpi.isg.sindy.util.NullValueCounter;
 import it.unimi.dsi.fastutil.ints.*;
-import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
@@ -74,7 +74,7 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<IntObjectTupl
             // FIXME: It should rather be .. by table ID (see PlanBuildingUtils#createTupleDataSet)
             Object2IntMap<IntList> offsetsWithId = this.offsetsWithIdByMinColumnId.get(minColumnId);
             if (offsetsWithId == null) {
-                offsetsWithId = new Object2IntArrayMap<>();
+                offsetsWithId = new Object2IntOpenHashMap<>();
                 this.offsetsWithIdByMinColumnId.put(minColumnId, offsetsWithId);
             }
             final IntList columnIndices = new IntArrayList(columnList.size());
@@ -109,7 +109,7 @@ public class SplitFieldsToCombinations extends RichFlatMapFunction<IntObjectTupl
         }
 
         ColumnCombinations:
-        for (final Object2IntArrayMap.Entry<IntList> entry : offsetsWithId.object2IntEntrySet()) {
+        for (final Object2IntMap.Entry<IntList> entry : offsetsWithId.object2IntEntrySet()) {
             final IntList columnOffsets = entry.getKey();
             final int combinationId = entry.getIntValue();
 
