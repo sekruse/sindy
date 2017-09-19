@@ -3,6 +3,7 @@ package de.hpi.isg.sindy.udf;
 import au.com.bytecode.opencsv.CSVParser;
 import de.hpi.isg.sindy.data.IntObjectTuple;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.configuration.Configuration;
@@ -11,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Parses a CSV row into a {@link IntObjectTuple}.
@@ -61,7 +61,8 @@ public class ParseCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         this.strictQuotes = strictQuotes;
         this.ignoreLeadingWhiteSpace = ignoreLeadingWhiteSpace;
         this.isDropDifferingLines = isDropDifferingLines;
-        this.numFieldsPerFile = numFieldsPerFile;
+        this.numFieldsPerFile = numFieldsPerFile == null && isDropDifferingLines ? new Int2IntOpenHashMap() : numFieldsPerFile;
+        if (this.numFieldsPerFile != null) this.numFieldsPerFile.defaultReturnValue(-1);
         this.nullString = nullString;
 
     }
@@ -87,7 +88,11 @@ public class ParseCsvRowsWithOpenCsv extends RichFlatMapFunction<IntObjectTuple<
         }
         if (this.numFieldsPerFile != null) {
             int numRequiredFields = this.numFieldsPerFile.get(fileId);
-            if (fields.length != numRequiredFields) {
+            if (numRequiredFields == -1) {
+                // If we should drop differing lines but don't know how many lines to expect, we make a best guess and
+                // assume the first seen line to be correct.
+                this.numFieldsPerFile.put(fileId, fields.length);
+            } else if (fields.length != numRequiredFields) { // We explicitly do not use numFields, because we are interested in the file integrity.
                 if (this.isDropDifferingLines) return;
                 throw new RuntimeException(String.format(
                         "Illegal number of fields in %s (expected %d, found %d).", fileLine, numRequiredFields, fields.length

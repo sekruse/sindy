@@ -198,32 +198,49 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
                     new ColumnPermutation(), new ColumnPermutation()
             );
         } else {
-            int depMinColumnId = ind.getDependentColumns()[0] & ~columnBitMask;
-            int depTableId = depMinColumnId | columnBitMask;
-            MetanomeIndAlgorithm.Table depTable = indexedInputTables.get(depTableId);
-            ColumnPermutation dep = new ColumnPermutation();
-            for (int depColumnId : ind.getDependentColumns()) {
-                int columnIndex = depColumnId - depMinColumnId;
-                dep.getColumnIdentifiers().add(new ColumnIdentifier(
-                        depTable.name,
-                        depTable.columnNames.get(columnIndex)
-                ));
-            }
-
-            int refMinColumnId = ind.getReferencedColumns()[0] & ~columnBitMask;
-            int refTableId = refMinColumnId | columnBitMask;
-            MetanomeIndAlgorithm.Table refTable = indexedInputTables.get(refTableId);
-            ColumnPermutation ref = new ColumnPermutation();
-            for (int refColumnId : ind.getReferencedColumns()) {
-                int columnIndex = refColumnId - refMinColumnId;
-                ref.getColumnIdentifiers().add(new ColumnIdentifier(
-                        refTable.name,
-                        refTable.columnNames.get(columnIndex)
-                ));
-            }
-            inclusionDependency = new InclusionDependency(dep, ref);
+            inclusionDependency = new InclusionDependency(
+                    getColumnCombination(ind.getDependentColumns(), columnBitMask, indexedInputTables),
+                    getColumnCombination(ind.getReferencedColumns(), columnBitMask, indexedInputTables)
+            );
         }
         return inclusionDependency;
+    }
+
+    /**
+     * Create a {@link ColumnPermutation} for the given column IDs.
+     *
+     * @param columnIds          the column IDs
+     * @param columnBitMask      mark the bits in the IDs that represent the column index
+     * @param indexedInputTables indexes the known tables
+     * @return the {@link ColumnPermutation}
+     */
+    private static ColumnPermutation getColumnCombination(int[] columnIds, int columnBitMask, Int2ObjectMap<MetanomeIndAlgorithm.Table> indexedInputTables) {
+        int minColumnId = columnIds[0] & ~columnBitMask;
+        int tableId = minColumnId | columnBitMask;
+        MetanomeIndAlgorithm.Table table = indexedInputTables.get(tableId);
+        ColumnPermutation columnPermutation = new ColumnPermutation();
+        if (table == null) {
+            System.err.printf("[Warning] No table for column IDs %s.\n", Arrays.toString(columnIds));
+            for (int columnId : columnIds) {
+                columnPermutation.getColumnIdentifiers().add(new ColumnIdentifier(
+                        String.format("(unknown table with ID %d)", tableId),
+                        String.format("column%d", columnId - minColumnId)
+                ));
+            }
+        } else {
+            for (int columnId : columnIds) {
+                int columnIndex = columnId - minColumnId;
+                String columnIdentifier;
+                if (table.columnNames.size() <= columnIndex) {
+                    System.err.printf("[Warning] No column for ID %d\n", columnId);
+                    columnIdentifier = String.format("(unknown column with index %d)", columnIndex);
+                } else {
+                    columnIdentifier = table.columnNames.get(columnIndex);
+                }
+                columnPermutation.getColumnIdentifiers().add(new ColumnIdentifier(table.name, columnIdentifier));
+            }
+        }
+        return columnPermutation;
     }
 
     /**
