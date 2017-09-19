@@ -113,6 +113,7 @@ public class Sandy extends AbstractSindy implements Runnable {
         this.collectAsync(handleResultCommandFactory, overlaps, jobName);
         JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
         this.updateExperimentWithDatasetSize(result);
+        this.updateExperimentWithIndStats(1, -1, this.newInds.size());
 
         this.allInds = this.newInds;
     }
