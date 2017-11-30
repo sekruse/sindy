@@ -1,5 +1,6 @@
 package de.hpi.isg.sindy.udf;
 
+import de.hpi.isg.sindy.util.OverlapAccumulator;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -7,6 +8,7 @@ import org.apache.flink.api.common.functions.GroupCombineFunction;
 import org.apache.flink.api.common.functions.RichGroupReduceFunction;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
 
 import java.util.Iterator;
@@ -32,16 +34,34 @@ public class GroupMultiUnionOverlapLists
 
     private Tuple4<Integer, Integer, int[], int[]> outputTuple = new Tuple4<>();
 
+    /**
+     * Keeps track of the relative overlaps (for the records).
+     */
+    private OverlapAccumulator overlapAccumulator;
+
+    @Override
+    public void open(Configuration parameters) throws Exception {
+        super.open(parameters);
+        this.overlapAccumulator = new OverlapAccumulator();
+        this.getRuntimeContext().addAccumulator(OverlapAccumulator.DEFAULT_KEY, this.overlapAccumulator);
+    }
 
     @Override
     public void combine(Iterable<Tuple4<Integer, Integer, int[], int[]>> inputAttributeLists,
                         Collector<Tuple4<Integer, Integer, int[], int[]>> collector) throws Exception {
-        this.reduce(inputAttributeLists, collector);
+        this.merge(inputAttributeLists, collector, false);
     }
 
     @Override
     public void reduce(Iterable<Tuple4<Integer, Integer, int[], int[]>> inputAttributeLists,
                        Collector<Tuple4<Integer, Integer, int[], int[]>> collector)
+            throws Exception {
+        this.merge(inputAttributeLists, collector, true);
+    }
+
+    private void merge(Iterable<Tuple4<Integer, Integer, int[], int[]>> inputAttributeLists,
+                       Collector<Tuple4<Integer, Integer, int[], int[]>> collector,
+                       boolean isCollectStatistics)
             throws Exception {
 
         Iterator<Tuple4<Integer, Integer, int[], int[]>> inputIterator = inputAttributeLists.iterator();
@@ -50,6 +70,12 @@ public class GroupMultiUnionOverlapLists
         // Short-cut if there is only a single element.
         if (!inputIterator.hasNext()) {
             collector.collect(firstElement);
+            if (isCollectStatistics) {
+                double numDistinctValues = firstElement.f0;
+                for (int overlapSize : firstElement.f3) {
+                    this.overlapAccumulator.add(numDistinctValues == 0 ? 1 : overlapSize / numDistinctValues);
+                }
+            }
             return;
         }
 
@@ -83,6 +109,14 @@ public class GroupMultiUnionOverlapLists
             i++;
         }
         collector.collect(this.outputTuple);
+
+        // Accumulate statistics.
+        if (isCollectStatistics) {
+            double numDistinctValues = this.outputTuple.f0;
+            for (int overlapSize : this.outputTuple.f3) {
+                this.overlapAccumulator.add(numDistinctValues == 0 ? 1 : overlapSize / numDistinctValues);
+            }
+        }
     }
 
 }

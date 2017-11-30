@@ -1,10 +1,8 @@
 package de.hpi.isg.sindy.core;
 
 import de.hpi.isg.sindy.io.RemoteCollectorImpl;
-import de.hpi.isg.sindy.util.IND;
-import de.hpi.isg.sindy.util.PartialIND;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.IntList;
+import de.hpi.isg.sindy.util.*;
+import it.unimi.dsi.fastutil.ints.*;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
@@ -112,10 +110,32 @@ public class Sandy extends AbstractSindy implements Runnable {
         this.newInds = new ArrayList<>();
         this.collectAsync(handleResultCommandFactory, overlaps, jobName);
         JobExecutionResult result = this.getJobMeasurements().get(0).getFlinkResults();
-        this.updateExperimentWithDatasetSize(result);
-        this.updateExperimentWithIndStats(1, -1, this.newInds.size());
-
+        int numColumns = this.updateExperimentWithDatasetSize(result);
+        this.updateExperimentWithIndStats(1, numColumns * (numColumns - 1), this.newInds.size());
+        this.updateExperimentWithOverlapRatios(result, numColumns);
         this.allInds = this.newInds;
+    }
+
+    /**
+     * Update the {@link #experiment} with data about the number of columns and tuples from the analyzed dataset.
+     *
+     * @param result of the Flink job that analyzed a dataset
+     * @param numColumns the number of columns in the dataset or {@code -1}
+     */
+    protected void updateExperimentWithOverlapRatios(JobExecutionResult result, int numColumns) {
+        if (this.experiment != null) {
+            IntArrayList buckets = result.getAccumulatorResult(OverlapAccumulator.DEFAULT_KEY);
+            PartialIndMeasurement partialIndMeasurement = new PartialIndMeasurement("partial-ind-stats");
+            int numCandidates = numColumns * (numColumns - 1);
+            for (int bucket = 1; bucket < OverlapAccumulator.NUM_BUCKETS; bucket++) {
+                int numOverlaps = buckets.getInt(bucket);
+                partialIndMeasurement.add(OverlapAccumulator.KEYS[bucket], numOverlaps);
+                numCandidates -= numOverlaps;
+            }
+            partialIndMeasurement.add(OverlapAccumulator.KEYS[0], numCandidates);
+            this.experiment.addMeasurement(partialIndMeasurement);
+            this.logger.info("Recorded {}.", partialIndMeasurement);
+        }
     }
 
 

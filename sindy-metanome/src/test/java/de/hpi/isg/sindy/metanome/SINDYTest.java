@@ -41,7 +41,7 @@ public class SINDYTest {
                             ',',
                             '\0',
                             '\0',
-                            true,
+                            false,
                             false,
                             0,
                             false,
@@ -60,6 +60,8 @@ public class SINDYTest {
         sindy.setRelationalInputConfigurationValue("inputFiles",
                 getFileInputGenerator("letters.csv"), getFileInputGenerator("letters-ext.csv")
         );
+        sindy.setIntegerConfigurationValue("maxArity", -1);
+        sindy.setStringConfigurationValue("candidateGenerator", "mind");
 
         ResultCache resultCache = new ResultCache("SINDY", null);
         sindy.setResultReceiver(resultCache);
