@@ -179,18 +179,8 @@ public class MultiFileTextInputFormat extends DelimitedInputFormat<IntObjectTupl
 
     @Override
     public boolean acceptFile(final FileStatus fileStatus) {
-        // If the file of this format is a directory (which this format expects), we need to make sure
-        // that this base directory passes the file filter.
-        boolean isBaseDir = false;
-        try {
-            // There seem to be problems in the path comparison, so we need to hack a little bit.
-            final Path path = getFilePath();
-            final FileSystem fileSystem = path.getFileSystem();
-            isBaseDir = fileSystem.getFileStatus(path).getPath().equals(fileStatus.getPath());
-        } catch (final IOException e) {
-            e.printStackTrace();
-        }
-        return isBaseDir || this.fileFilter.accept(fileStatus);
+        // This file filter allows to visit sub-directories
+        return fileStatus.isDir() || this.fileFilter.accept(fileStatus);
     }
 
     @Override

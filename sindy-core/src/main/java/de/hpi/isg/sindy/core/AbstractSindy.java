@@ -23,6 +23,7 @@ import org.apache.flink.api.java.tuple.Tuple1;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -209,13 +210,26 @@ public abstract class AbstractSindy {
         }
 
         // TODO: Check if any of the files has a compression suffix.
+
+        // Determine the common parent path and, if it is not the direct parent of all files, enable nested
+        // file enumeration.
         String inputPath = FileUtils.findCommonParent(paths2minColumnId.keySet());
+        boolean isNestedFileEnumerationRequired = false;
+        int commonPathDepth = new Path(inputPath).depth();
+        for (String path : paths2minColumnId.keySet()) {
+            if (new Path(path).depth() > commonPathDepth + 1) {
+                isNestedFileEnumerationRequired = true;
+                break;
+            }
+        }
+
         final MultiFileTextInputFormat.ListBasedFileIdRetriever fileIdRetriever =
                 new MultiFileTextInputFormat.ListBasedFileIdRetriever(paths2minColumnId);
         MultiFileTextInputFormat inputFormat;
         inputFormat = new MultiFileTextInputFormat(fileIdRetriever, fileIdRetriever, null);
         inputFormat.setEncoding(this.encoding);
         inputFormat.setFilePath(inputPath);
+        inputFormat.setNestedFileEnumeration(isNestedFileEnumerationRequired);
         // TODO: Enable if needed.
 //                inputFormat.setRecordDetector(new CsvRecordStateMachine(csvParameters.getFieldSeparatorChar(),
 //                        csvParameters.getQuoteChar(), '\n', encoding.getCharset()));
@@ -621,11 +635,13 @@ public abstract class AbstractSindy {
      * Update the {@link #experiment} with data about the number of columns and tuples from the analyzed dataset.
      *
      * @param result of the Flink job that analyzed a dataset
+     * @return the number of columns or {@code -1}
      */
-    protected void updateExperimentWithDatasetSize(JobExecutionResult result) {
+    protected int updateExperimentWithDatasetSize(JobExecutionResult result) {
         if (this.experiment != null) {
             Int2IntMap tableWidths = result.getAccumulatorResult(TableWidthAccumulator.DEFAULT_KEY);
             Int2LongOpenHashMap tableHeights = result.getAccumulatorResult(TableHeightAccumulator.DEFAULT_KEY);
+            int numAllColumns = 0;
             if (tableWidths != null && tableHeights != null) {
                 long numTuples = 0L;
                 for (Int2LongMap.Entry entry : tableHeights.int2LongEntrySet()) {
@@ -645,8 +661,12 @@ public abstract class AbstractSindy {
                 datasetMeasurement.setNumColumns(numColumns);
                 datasetMeasurement.setNumTuples(numTuples);
                 this.experiment.addMeasurement(datasetMeasurement);
+
+                numAllColumns += numColumns;
             }
+            return numAllColumns;
         }
+        return -1;
     }
 
     /**
