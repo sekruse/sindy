@@ -212,41 +212,53 @@ public class Andy extends AbstractSindy implements Runnable {
             // For any column combination in the n-ary IND candidates, create an ID.
             final Object2IntMap<IntList> columnCombinationIds = this.createIdsForColumnCombinations2(indCandidates);
             final Int2ObjectMap<IntList> columnCombinationsById = this.invert(columnCombinationIds);
+            Object2LongMap<IntList> nullValueCounts = new Object2LongOpenHashMap<>(simpleNullValueCounts.size());
+            Object2LongMap<IntList> distinctValueCounts = new Object2LongOpenHashMap<>(simpleDistinctValueCounts.size());
 
             // Build and execute the appropriate Flink job.
             this.newInds = new ArrayList<>();
-            DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds).project(0, 2);
-            AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
-                    indSet ->
-                            (Runnable) () -> {
-                                int dependentId = indSet.f0;
-                                for (int referencedId : indSet.f1) {
-                                    Andy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
-                                }
-                            };
-            jobName = String.format("ANDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
-            this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
 
-            // Collect the number of distinct values and null values per column combination.
-            result = this.getJobMeasurements().get(newArity - 1).getFlinkResults();
-            Int2LongOpenHashMap encodedNullValueCounts = result.getAccumulatorResult(NullValueCounter.DEFAULT_KEY);
-            Object2LongMap<IntList> nullValueCounts = new Object2LongOpenHashMap<>(simpleNullValueCounts.size());
-            for (ObjectIterator<Int2LongMap.Entry> iter = encodedNullValueCounts.int2LongEntrySet().fastIterator(); iter.hasNext(); ) {
-                Int2LongMap.Entry entry = iter.next();
-                int columnCombinationId = entry.getIntKey();
-                IntList columnCombination = sorted(columnCombinationsById.get(columnCombinationId));
-                nullValueCounts.put(columnCombination, entry.getLongValue());
+            int chunkNum = 0;
+            Collection<Set<IND>> indCandidateChunks = this.chunk(indCandidates);
+            for (Set<IND> chunk : indCandidateChunks) {
+                chunkNum++;
+                Object2IntMap<IntList> chunkColumnCombinationIds = indCandidateChunks.size() == 1 ?
+                        columnCombinationIds :
+                        this.filterColumnCombinations(columnCombinationIds, chunk);
+                DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(chunkColumnCombinationIds).project(0, 2);
+                AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
+                        indSet ->
+                                (Runnable) () -> {
+                                    int dependentId = indSet.f0;
+                                    for (int referencedId : indSet.f1) {
+                                        Andy.this.collectInd(dependentId, referencedId, columnCombinationsById, chunk);
+                                    }
+                                };
+                jobName = String.format("SINDY on %d tables (%d-ary, %d/%d, %s)",
+                        this.inputFiles.size(), newArity, chunkNum, indCandidateChunks.size(), new Date()
+                );
+                this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+
+
+                // Collect the number of distinct values and null values per column combination.
+                result = this.getJobMeasurements().get(this.getJobMeasurements().size() - 1).getFlinkResults();
+                Int2LongOpenHashMap encodedNullValueCounts = result.getAccumulatorResult(NullValueCounter.DEFAULT_KEY);
+                for (ObjectIterator<Int2LongMap.Entry> iter = encodedNullValueCounts.int2LongEntrySet().fastIterator(); iter.hasNext(); ) {
+                    Int2LongMap.Entry entry = iter.next();
+                    int columnCombinationId = entry.getIntKey();
+                    IntList columnCombination = sorted(columnCombinationsById.get(columnCombinationId));
+                    nullValueCounts.put(columnCombination, entry.getLongValue());
+                }
+
+                Int2LongOpenHashMap encodedDistinctValueCounts = result.getAccumulatorResult(DistinctValueCounter.DEFAULT_KEY);
+                for (ObjectIterator<Int2LongMap.Entry> iter = encodedDistinctValueCounts.int2LongEntrySet().fastIterator(); iter.hasNext(); ) {
+                    Int2LongMap.Entry entry = iter.next();
+                    int columnCombinationId = entry.getIntKey();
+                    IntList columnCombination = columnCombinationsById.get(columnCombinationId);
+                    distinctValueCounts.put(columnCombination, entry.getLongValue());
+                }
             }
             nullValueCountsByArity.add(newArity - 1, nullValueCounts);
-
-            Int2LongOpenHashMap encodedDistinctValueCounts = result.getAccumulatorResult(DistinctValueCounter.DEFAULT_KEY);
-            Object2LongMap<IntList> distinctValueCounts = new Object2LongOpenHashMap<>(simpleDistinctValueCounts.size());
-            for (ObjectIterator<Int2LongMap.Entry> iter = encodedDistinctValueCounts.int2LongEntrySet().fastIterator(); iter.hasNext(); ) {
-                Int2LongMap.Entry entry = iter.next();
-                int columnCombinationId = entry.getIntKey();
-                IntList columnCombination = columnCombinationsById.get(columnCombinationId);
-                distinctValueCounts.put(columnCombination, entry.getLongValue());
-            }
             distinctValueCountsByArity.add(newArity - 1, distinctValueCounts);
 
             // Go over the INDs, determine column combination metadata, and determine IND ARs.

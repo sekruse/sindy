@@ -143,6 +143,113 @@ public class AndyTest {
     }
 
     @Test
+    public void testNaryDiscoveryWithChunking() {
+        int numColumnBits = 16;
+        Int2ObjectMap<String> indexedInputFiles = AbstractSindy.indexInputFiles(
+                Arrays.asList(getUrl("letters.csv"), getUrl("letters-ext.csv")),
+                numColumnBits
+        );
+        int lettersMinColumnId = 0;
+        int lettersExtMinColumnId = 1 << 16;
+        Set<IND> inds = new HashSet<>();
+        Andy andy = new Andy(
+                indexedInputFiles,
+                numColumnBits,
+                this.executionEnvironment,
+                inds::add
+        );
+        andy.setFieldSeparator(',');
+        andy.setCandidateChunkSize(1);
+        andy.run();
+
+        Set<IND> expectedINDs = new HashSet<>();
+        expectedINDs.add(new IND(
+                new int[]{lettersMinColumnId, lettersMinColumnId + 1, lettersMinColumnId + 3},
+                new int[]{lettersExtMinColumnId, lettersExtMinColumnId + 1, lettersExtMinColumnId + 3}
+        ));
+        expectedINDs.add(new IND(
+                new int[]{lettersMinColumnId, lettersMinColumnId + 2, lettersMinColumnId + 3},
+                new int[]{lettersExtMinColumnId, lettersExtMinColumnId + 2, lettersExtMinColumnId + 3}
+        ));
+        expectedINDs.add(new IND(
+                new int[]{lettersMinColumnId, lettersMinColumnId + 1, lettersMinColumnId + 2},
+                new int[]{lettersExtMinColumnId, lettersExtMinColumnId + 1, lettersExtMinColumnId + 2}
+        ));
+
+        expectedINDs.add(new IND(
+                new int[]{lettersExtMinColumnId + 1, lettersExtMinColumnId + 3},
+                new int[]{lettersMinColumnId + 1, lettersMinColumnId + 3}
+        ));
+        expectedINDs.add(new IND(
+                new int[]{lettersExtMinColumnId + 2, lettersExtMinColumnId + 3},
+                new int[]{lettersMinColumnId + 2, lettersMinColumnId + 3}
+        ));
+        expectedINDs.add(new IND(
+                new int[]{lettersExtMinColumnId + 1, lettersExtMinColumnId + 2},
+                new int[]{lettersMinColumnId + 1, lettersMinColumnId + 2}
+        ));
+
+        Collection<IND> consolidatedINDs = new HashSet<>(andy.getConsolidatedINDs());
+
+        for (IND ind : consolidatedINDs) {
+            Assert.assertTrue(
+                    String.format("%s is not expected.", ind.toString(indexedInputFiles, numColumnBits)),
+                    expectedINDs.contains(ind)
+            );
+        }
+        for (IND ind : expectedINDs) {
+            Assert.assertTrue(
+                    String.format("%s has not been discovered.", ind.toString(indexedInputFiles, numColumnBits)),
+                    consolidatedINDs.contains(ind)
+            );
+        }
+
+        Set<IndAugmentationRule> expectedIARs = new HashSet<>();
+        expectedIARs.add(new IndAugmentationRule(
+                new IND(
+                        new int[]{lettersMinColumnId + 2, lettersMinColumnId + 3},
+                        new int[]{lettersExtMinColumnId + 2, lettersExtMinColumnId + 3}
+                ),
+                new IND(lettersMinColumnId + 1, lettersExtMinColumnId + 1)
+        ));
+        expectedIARs.add(new IndAugmentationRule(
+                new IND(
+                        new int[]{lettersMinColumnId + 1, lettersMinColumnId + 3},
+                        new int[]{lettersExtMinColumnId + 1, lettersExtMinColumnId + 3}
+                ),
+                new IND(lettersMinColumnId + 2, lettersExtMinColumnId + 2)
+        ));
+        expectedIARs.add(new IndAugmentationRule(
+                new IND(
+                        new int[]{lettersExtMinColumnId + 2, lettersExtMinColumnId + 3},
+                        new int[]{lettersMinColumnId + 2, lettersMinColumnId + 3}
+                ),
+                new IND(lettersExtMinColumnId + 1, lettersMinColumnId + 1)
+        ));
+        expectedIARs.add(new IndAugmentationRule(
+                new IND(
+                        new int[]{lettersExtMinColumnId + 1, lettersExtMinColumnId + 3},
+                        new int[]{lettersMinColumnId + 1, lettersMinColumnId + 3}
+                ),
+                new IND(lettersExtMinColumnId + 2, lettersMinColumnId + 2)
+        ));
+
+        Set<IndAugmentationRule> augmentationRules = new HashSet<>(andy.getAugmentationRules());
+        for (IndAugmentationRule iar : augmentationRules) {
+            Assert.assertTrue(
+                    String.format("%s (%s) is not expected.", iar.toString(indexedInputFiles, numColumnBits), iar),
+                    expectedIARs.contains(iar)
+            );
+        }
+        for (IndAugmentationRule iar : expectedIARs) {
+            Assert.assertTrue(
+                    String.format("%s (%s) has not been discovered.", iar.toString(indexedInputFiles, numColumnBits), iar),
+                    augmentationRules.contains(iar)
+            );
+        }
+    }
+
+    @Test
     public void testNaryDiscoveryWithVoidInds() {
         int numColumnBits = 16;
         Int2ObjectMap<String> indexedInputFiles = AbstractSindy.indexInputFiles(
