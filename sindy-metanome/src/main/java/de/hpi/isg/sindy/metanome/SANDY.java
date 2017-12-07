@@ -33,14 +33,21 @@ public class SANDY extends MetanomeIndAlgorithm {
         this.applyBasicConfiguration(sandy);
         sandy.setMinRelativeOverlap(1d - this.maxError);
 
-        // Run Sandy.
-        sandy.run();
-
-        // Translate the INDs.
-        int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
-        for (PartialIND pind : sandy.getAllInds()) {
-            InclusionDependency inclusionDependency = this.translate(pind, indexedInputTables, columnBitMask);
-            this.resultReceiver.receiveResult(inclusionDependency);
+        try {
+            // Run Sandy.
+            sandy.run();
+        } finally {
+            // Try to rescue any INDs in case of a crash, too.
+            // Translate the INDs.
+            try {
+                int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
+                for (PartialIND pind : sandy.getAllInds()) {
+                    InclusionDependency inclusionDependency = this.translate(pind, indexedInputTables, columnBitMask);
+                    this.resultReceiver.receiveResult(inclusionDependency);
+                }
+            } catch (Throwable t) {
+                logger.error("Could not write the results.", t);
+            }
         }
     }
 

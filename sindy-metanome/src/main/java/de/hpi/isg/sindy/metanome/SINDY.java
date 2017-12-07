@@ -52,14 +52,21 @@ public class SINDY extends MetanomeIndAlgorithm {
                 throw new AlgorithmExecutionException(String.format("Unknown candidate generator: %s", this.candidateGenerator));
         }
 
-        // Run Sindy.
-        sindy.run();
-
-        // Translate the INDs.
-        int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
-        for (IND ind : sindy.getConsolidatedINDs()) {
-            InclusionDependency inclusionDependency = this.translate(ind, indexedInputTables, columnBitMask);
-            this.resultReceiver.receiveResult(inclusionDependency);
+        try {
+            // Run Sindy.
+            sindy.run();
+        } finally {
+            // Try to rescue any INDs in case of a crash, too.
+            try {
+                // Translate the INDs.
+                int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
+                for (IND ind : sindy.getConsolidatedINDs()) {
+                    InclusionDependency inclusionDependency = this.translate(ind, indexedInputTables, columnBitMask);
+                    this.resultReceiver.receiveResult(inclusionDependency);
+                }
+            } catch (Throwable t) {
+                logger.error("Could not write the results.", t);
+            }
         }
     }
 

@@ -26,22 +26,29 @@ public class ANDY extends MetanomeIndAlgorithm {
         });
         this.applyBasicConfiguration(andy);
 
-        // Run Andy.
-        andy.run();
+        try {
+            // Run Andy.
+            andy.run();
+        } finally {
+            try {
+                // Translate the INDs.
+                int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
+                for (IND ind : andy.getConsolidatedINDs()) {
+                    InclusionDependency inclusionDependency = this.translate(ind, indexedInputTables, columnBitMask);
+                    this.resultReceiver.receiveResult(inclusionDependency);
+                }
 
-        // Translate the INDs.
-        int columnBitMask = -1 >>> (Integer.SIZE - this.numColumnBits);
-        for (IND ind : andy.getConsolidatedINDs()) {
-            InclusionDependency inclusionDependency = this.translate(ind, indexedInputTables, columnBitMask);
-            this.resultReceiver.receiveResult(inclusionDependency);
+                // Print the IARs, so that they are not completely lost.
+                System.out.println("IND augmentation rules:");
+                for (IndAugmentationRule iar : andy.getAugmentationRules()) {
+                    System.out.println(this.format(iar, indexedInputTables, columnBitMask));
+                }
+                System.out.println("END");
+            } catch (Throwable t) {
+                logger.error("Could not write the results.", t);
+            }
         }
 
-        // Print the IARs, so that they are not completely lost.
-        System.out.println("IND augmentation rules:");
-        for (IndAugmentationRule iar : andy.getAugmentationRules()) {
-            System.out.println(this.format(iar, indexedInputTables, columnBitMask));
-        }
-        System.out.println("END");
     }
 
     @Override
