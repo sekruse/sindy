@@ -111,6 +111,7 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
         this.sindy.setNotUseGroupOperators(this.getBasicSindyParameters().isNotUseGroupOperators);
         this.sindy.setMaxColumns(this.getBasicSindyParameters().maxColumns);
         this.sindy.setSampleRows(this.getBasicSindyParameters().sampleRows);
+        this.sindy.setCandidateChunkSize(this.parameters.candidateChunkSize);
 
         // TODO: Use per-file encoding settings as before.
         this.sindy.setFieldSeparator(csvFileLocation.getFieldSeparator());
@@ -196,6 +197,9 @@ public class SINDY extends MdmsAppTemplate<SINDY.Parameters> {
 
         @Parameter(names = {"--max-n"}, description = "search at max n-ary INDs", required = false)
         public int maxN = 1;
+
+        @Parameter(names = {"--candidate-chunk-size"}, description = "maximum number of INDs to be checked simultaneously")
+        public int candidateChunkSize;
 
         @Parameter(names = "--nary-gen", description = "n-ary IND candidate generation strategy", required = false)
         public String candidateGenerator = "apriori";
