@@ -177,6 +177,53 @@ public class SindyTest {
         }
     }
 
+    @Test
+    public void testPessimisticNaryDiscoveryWithChunking() {
+        int numColumnBits = 16;
+        Int2ObjectMap<String> indexedInputFiles = AbstractSindy.indexInputFiles(
+                Arrays.asList(getUrl("letters.csv"), getUrl("letters-ext.csv")),
+                numColumnBits
+        );
+        int lettersMinColumnId = 0;
+        int lettersExtMinColumnId = 1 << 16;
+        Set<IND> inds = new HashSet<>();
+        this.executionEnvironment.setParallelism(1);
+        Sindy sindy = new Sindy(
+                indexedInputFiles,
+                numColumnBits,
+                this.executionEnvironment,
+                inds::add
+        );
+        sindy.setCandidateChunkSize(1);
+        sindy.setFieldSeparator(',');
+        sindy.run();
+
+        Set<IND> expectedINDs = new HashSet<>();
+        expectedINDs.add(new IND(
+                new int[]{lettersMinColumnId, lettersMinColumnId + 1, lettersMinColumnId + 2, lettersMinColumnId + 3},
+                new int[]{lettersExtMinColumnId, lettersExtMinColumnId + 1, lettersExtMinColumnId + 2, lettersExtMinColumnId + 3}
+        ));
+        expectedINDs.add(new IND(
+                new int[]{lettersExtMinColumnId + 1, lettersExtMinColumnId + 2, lettersExtMinColumnId + 3},
+                new int[]{lettersMinColumnId + 1, lettersMinColumnId + 2, lettersMinColumnId + 3}
+        ));
+
+        Collection<IND> consolidatedINDs = new HashSet<>(sindy.getConsolidatedINDs());
+
+        for (IND ind : consolidatedINDs) {
+            Assert.assertTrue(
+                    String.format("%s is not expected.", ind.toString(indexedInputFiles, numColumnBits)),
+                    expectedINDs.contains(ind)
+            );
+        }
+        for (IND ind : expectedINDs) {
+            Assert.assertTrue(
+                    String.format("%s has not been discovered.", ind.toString(indexedInputFiles, numColumnBits)),
+                    consolidatedINDs.contains(ind)
+            );
+        }
+    }
+
     @Ignore("Mixed IND traversal strategies are not yet implemented fully.")
     @Test
     public void testMixedNaryDiscoveryWithZigZag() {

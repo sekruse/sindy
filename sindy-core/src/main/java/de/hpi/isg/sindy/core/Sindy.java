@@ -222,18 +222,30 @@ public class Sindy extends AbstractSindy implements Runnable {
             // Build and execute the appropriate Flink job.
             this.newInds = new ArrayList<>();
             this.seenDependentIds.clear();
-            DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(columnCombinationIds).project(0, 2);
-            AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
-                    indSet ->
-                            (Runnable) () -> {
-                                int dependentId = indSet.f0;
-                                for (int referencedId : indSet.f1) {
-                                    Sindy.this.collectInd(dependentId, referencedId, columnCombinationsById, indCandidates);
-                                }
-                                this.seenDependentIds.add(dependentId);
-                            };
-            String jobName = String.format("SINDY on %d tables (%d-ary, %s)", this.inputFiles.size(), newArity, new Date());
-            this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+            int chunkNum = 0;
+            Collection<Set<IND>> indCandidateChunks = this.chunk(indCandidates);
+            for (Set<IND> chunk : indCandidateChunks) {
+                chunkNum++;
+                Object2IntMap<IntList> chunkColumnCombinationIds = indCandidateChunks.size() == 1 ?
+                        columnCombinationIds :
+                        this.filterColumnCombinations(columnCombinationIds, chunk);
+
+                DataSet<Tuple2<Integer, int[]>> indSets = this.buildNaryIndDetectionPlan(chunkColumnCombinationIds).project(0, 2);
+                AbstractSindy.AddCommandFactory<Tuple2<Integer, int[]>> addNaryIndCommandFactory =
+                        indSet ->
+                                (Runnable) () -> {
+                                    int dependentId = indSet.f0;
+                                    for (int referencedId : indSet.f1) {
+                                        Sindy.this.collectInd(dependentId, referencedId, columnCombinationsById, chunk);
+                                    }
+                                    this.seenDependentIds.add(dependentId);
+                                };
+                String jobName = String.format("SINDY on %d tables (%d-ary, %d/%d, %s)",
+                        this.inputFiles.size(), newArity, chunkNum, indCandidateChunks.size(), new Date()
+                );
+                this.collectAsync(addNaryIndCommandFactory, indSets, jobName);
+            }
+
 
             // Detect empty columns and add appropriate INDs.
             // Index the INDs by their dependent columns.

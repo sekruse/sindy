@@ -97,6 +97,13 @@ public abstract class AbstractSindy {
      */
     protected boolean isExcludeVoidIndsFromCandidateGeneration;
 
+    /**
+     * There might be very many n-ary IND candidates in datasets. As a result, the Flink jobs to check them
+     * might become too large to ship. Hence, it is possible to check them in smaller chunks as defined per this
+     * field. A value less or equal to 0 states that chunking should not be applied.
+     */
+    private int candidateChunkSize = -1;
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Parsing configuration.                                                                                         //
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -707,6 +714,45 @@ public abstract class AbstractSindy {
         }
     }
 
+    /**
+     * Chunks {@link IND} candidates as governed by {@link #candidateChunkSize}.
+     *
+     * @param inds that should be chunked
+     * @return the chunks
+     */
+    protected Collection<Set<IND>> chunk(Set<IND> inds) {
+        if (this.candidateChunkSize <= 0 || inds.size() <= this.candidateChunkSize) return Collections.singleton(inds);
+        Collection<Set<IND>> chunks = new LinkedList<>();
+        Set<IND> chunk = null;
+        for (IND ind : inds) {
+            if (chunk == null || chunk.size() >= this.candidateChunkSize) {
+                chunk = new HashSet<>();
+                chunks.add(chunk);
+            }
+            chunk.add(ind);
+        }
+        return chunks;
+    }
+
+    /**
+     * Creates a filtered copy of the {@code columnCombinationIndex} with those column combinations only that appear in the
+     * given {@code inds}.
+     *
+     * @param columnCombinationIndex the index of column combinations
+     * @param inds                   the {@link IND}s to filter with
+     * @return the filtered index
+     */
+    protected Object2IntMap<IntList> filterColumnCombinations(Object2IntMap<IntList> columnCombinationIndex, Set<IND> inds) {
+        Object2IntMap<IntList> filteredIndex = new Object2IntOpenHashMap<>(Math.min(inds.size() * 2, columnCombinationIndex.size()));
+        for (IND ind : inds) {
+            IntArrayList key = new IntArrayList(ind.getDependentColumns());
+            filteredIndex.put(key, columnCombinationIndex.get(key));
+            key = new IntArrayList(ind.getReferencedColumns());
+            filteredIndex.put(key, columnCombinationIndex.get(key));
+        }
+        return filteredIndex;
+    }
+
 
     public Int2ObjectMap<String> getInputFiles() {
         return this.inputFiles;
@@ -846,6 +892,14 @@ public abstract class AbstractSindy {
 
     public void setOnlyCountInds(boolean onlyCountInds) {
         this.isOnlyCountInds = onlyCountInds;
+    }
+
+    public int getCandidateChunkSize() {
+        return candidateChunkSize;
+    }
+
+    public void setCandidateChunkSize(int candidateChunkSize) {
+        this.candidateChunkSize = candidateChunkSize;
     }
 
     /**

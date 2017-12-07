@@ -28,6 +28,8 @@ import de.metanome.cli.HdfsInputGenerator;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.apache.flink.api.java.ExecutionEnvironment;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
@@ -37,6 +39,8 @@ import java.util.*;
 public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorithm,
         StringParameterAlgorithm, IntegerParameterAlgorithm, BooleanParameterAlgorithm,
         ExperimentParameterAlgorithm, RelationalInputParameterAlgorithm {
+
+    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     protected List<RelationalInputGenerator> inputGenerators = new ArrayList<>();
 
@@ -65,6 +69,12 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
      */
     @MetanomeProperty
     protected boolean isNotUseGroupOperators;
+
+    /**
+     * @see AbstractSindy#candidateChunkSize
+     */
+    @MetanomeProperty
+    protected int candidateChunkSize = -1;
 
     /**
      * @see AbstractSindy#maxArity
@@ -357,6 +367,7 @@ public abstract class MetanomeIndAlgorithm implements InclusionDependencyAlgorit
         algorithm.setMaxColumns(this.maxColumns);
         algorithm.setNotUseGroupOperators(this.isNotUseGroupOperators);
         algorithm.setOnlyCountInds(false);
+        algorithm.setCandidateChunkSize(this.candidateChunkSize);
         algorithm.setMaxArity(this.maxArity);
         for (NaryIndRestrictions indRestrictions : NaryIndRestrictions.values()) {
             if (this.naryIndRestrictions.equalsIgnoreCase(indRestrictions.name())) {
