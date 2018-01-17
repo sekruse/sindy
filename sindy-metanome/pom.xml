@@ -28,6 +28,7 @@
                             <artifactSet>
                                 <excludes>
                                     <!--<exclude>org.apache.flink:*</exclude>-->
+                                    <exclude>de.metanome:metanome-cli</exclude>
                                 </excludes>
                             </artifactSet>
                             <transformers>
