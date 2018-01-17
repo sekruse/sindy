@@ -1,4 +1,4 @@
-# SINDY
+# SINDY, SANDY, and ANDY
 
 SINDY is a *S*calable *IN*clusion *D*ependenc*Y* algorithm based on Apache Flink described in a [BTW'15 paper](https://hpi.de/fileadmin/user_upload/fachgebiete/naumann/publications/2015/Scaling_out_the_discovery_of_INDs-CR.pdf).
 In contrast to the original algorithm in the publication, this repository contains derivatives of SINDY that support n-ary IND discovery and approximate/partial IND discovery.
